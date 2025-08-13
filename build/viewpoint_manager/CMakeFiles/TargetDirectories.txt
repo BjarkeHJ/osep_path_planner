@@ -1,9 +1,0 @@
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/uninstall.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/viewpoint_manager_uninstall.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/test.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/edit_cache.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/rebuild_cache.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/list_install_components.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/install.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/install/local.dir
-/home/airlab/osep_path_planner/build/viewpoint_manager/CMakeFiles/install/strip.dir
