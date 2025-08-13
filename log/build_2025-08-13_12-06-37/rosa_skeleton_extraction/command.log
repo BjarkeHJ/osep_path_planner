@@ -1,1 +1,0 @@
-Invoking command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/rosa_skeleton_extraction -- -j8 -l8

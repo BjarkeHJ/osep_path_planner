@@ -1,6 +1,0 @@
-Invoking command in '/home/airlab/osep_path_planner/build/viewpoint_manager': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/viewpoint_manager -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/viewpoint_manager
-Invoked command in '/home/airlab/osep_path_planner/build/viewpoint_manager' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/viewpoint_manager -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/viewpoint_manager
-Invoking command in '/home/airlab/osep_path_planner/build/viewpoint_manager': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/viewpoint_manager -- -j8 -l8
-Invoked command in '/home/airlab/osep_path_planner/build/viewpoint_manager' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/viewpoint_manager -- -j8 -l8
-Invoking command in '/home/airlab/osep_path_planner/build/viewpoint_manager': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/viewpoint_manager
-Invoked command in '/home/airlab/osep_path_planner/build/viewpoint_manager' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/viewpoint_manager

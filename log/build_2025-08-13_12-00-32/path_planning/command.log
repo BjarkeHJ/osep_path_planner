@@ -1,2 +1,0 @@
-Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/path_planning -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/path_planning
-Invoked command in '/home/airlab/osep_path_planner/build/path_planning' returned '1': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/path_planning -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/path_planning

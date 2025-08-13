@@ -1,1 +1,0 @@
-Invoking command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/rosa_skeleton_extraction -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/rosa_skeleton_extraction

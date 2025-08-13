@@ -1,1 +1,0 @@
-Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/path_planning -- -j8 -l8
