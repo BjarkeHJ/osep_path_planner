@@ -1,0 +1,23 @@
+[0.011s] Invoking command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/rosa_skeleton_extraction -- -j8 -l8
+[0.047s] [ 25%] [32mBuilding CXX object CMakeFiles/rosa_skel_extract.dir/src/rosa_node.cpp.o[0m
+[0.047s] [ 50%] [32mBuilding CXX object CMakeFiles/rosa_skel_extract.dir/src/extract_tools.cpp.o[0m
+[0.047s] [ 75%] [32mBuilding CXX object CMakeFiles/rosa_skel_extract.dir/src/rosa_main.cpp.o[0m
+[0.056s] [01m[K/home/airlab/osep_path_planner/src/rosa_skeleton_extraction/src/rosa_node.cpp:10:9:[m[K [01;31m[Kfatal error: [m[Krosa_main.hpp: No such file or directory
+[0.056s]    10 | #include[01;31m[K<rosa_main.hpp>[m[K
+[0.056s]       |         [01;31m[K^~~~~~~~~~~~~~~[m[K
+[0.056s] compilation terminated.
+[0.056s] gmake[2]: *** [CMakeFiles/rosa_skel_extract.dir/build.make:76: CMakeFiles/rosa_skel_extract.dir/src/rosa_node.cpp.o] Error 1
+[0.056s] gmake[2]: *** Waiting for unfinished jobs....
+[0.057s] [01m[K/home/airlab/osep_path_planner/src/rosa_skeleton_extraction/src/extract_tools.cpp:1:10:[m[K [01;31m[Kfatal error: [m[Kextract_tools.hpp: No such file or directory
+[0.057s]     1 | #include [01;31m[K"extract_tools.hpp"[m[K
+[0.057s]       |          [01;31m[K^~~~~~~~~~~~~~~~~~~[m[K
+[0.057s] compilation terminated.
+[0.057s] [01m[K/home/airlab/osep_path_planner/src/rosa_skeleton_extraction/src/rosa_main.cpp:10:10:[m[K [01;31m[Kfatal error: [m[Krosa_main.hpp: No such file or directory
+[0.057s]    10 | #include [01;31m[K<rosa_main.hpp>[m[K
+[0.057s]       |          [01;31m[K^~~~~~~~~~~~~~~[m[K
+[0.057s] compilation terminated.
+[0.057s] gmake[2]: *** [CMakeFiles/rosa_skel_extract.dir/build.make:104: CMakeFiles/rosa_skel_extract.dir/src/extract_tools.cpp.o] Error 1
+[0.057s] gmake[2]: *** [CMakeFiles/rosa_skel_extract.dir/build.make:90: CMakeFiles/rosa_skel_extract.dir/src/rosa_main.cpp.o] Error 1
+[0.057s] gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/rosa_skel_extract.dir/all] Error 2
+[0.057s] gmake: *** [Makefile:146: all] Error 2
+[0.074s] Invoked command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction' returned '2': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/rosa_skeleton_extraction -- -j8 -l8

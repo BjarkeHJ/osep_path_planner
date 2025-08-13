@@ -1,0 +1,4 @@
+source;share/viewpoint_manager/local_setup.bash
+source;share/viewpoint_manager/local_setup.dsv
+source;share/viewpoint_manager/local_setup.sh
+source;share/viewpoint_manager/local_setup.zsh

@@ -1,0 +1,4 @@
+source;share/rosa_skeleton_extraction/local_setup.bash
+source;share/rosa_skeleton_extraction/local_setup.dsv
+source;share/rosa_skeleton_extraction/local_setup.sh
+source;share/rosa_skeleton_extraction/local_setup.zsh

@@ -1,0 +1,4 @@
+[35m[1mConsolidate compiler generated dependencies of target rosa_skeleton_extraction[0m
+[ 25%] [32mBuilding CXX object CMakeFiles/rosa_skeleton_extraction.dir/src/rosa_node.cpp.o[0m
+[ 50%] [32mBuilding CXX object CMakeFiles/rosa_skeleton_extraction.dir/src/rosa_main.cpp.o[0m
+[ 75%] [32mBuilding CXX object CMakeFiles/rosa_skeleton_extraction.dir/src/extract_tools.cpp.o[0m

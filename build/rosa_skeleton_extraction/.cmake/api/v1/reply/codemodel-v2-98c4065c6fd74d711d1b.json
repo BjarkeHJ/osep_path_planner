@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-03d6bd5ed2d8645a09a9.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "rosa_skeleton_extraction",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "rosa_skeleton_extraction::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-rosa_skeleton_extraction-5bf606aaf014050a2f1c.json",
+					"name" : "rosa_skeleton_extraction",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "rosa_skeleton_extraction_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-rosa_skeleton_extraction_uninstall-5e7e53fb5dab1ab570d2.json",
+					"name" : "rosa_skeleton_extraction_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-9d50ec67710f2f3c6404.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/airlab/osep_path_planner/build/rosa_skeleton_extraction",
+		"source" : "/home/airlab/osep_path_planner/src/rosa_skeleton_extraction"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

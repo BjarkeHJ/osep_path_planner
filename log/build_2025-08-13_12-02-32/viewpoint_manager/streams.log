@@ -1,0 +1,20 @@
+[0.011s] Invoking command in '/home/airlab/osep_path_planner/build/viewpoint_manager': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/viewpoint_manager -- -j8 -l8
+[0.035s] Invoked command in '/home/airlab/osep_path_planner/build/viewpoint_manager' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/viewpoint_manager -- -j8 -l8
+[0.045s] Invoking command in '/home/airlab/osep_path_planner/build/viewpoint_manager': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/viewpoint_manager
+[0.052s] -- Install configuration: ""
+[0.052s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/ament_index/resource_index/package_run_dependencies/viewpoint_manager
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/ament_index/resource_index/parent_prefix_path/viewpoint_manager
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/environment/ament_prefix_path.sh
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/environment/ament_prefix_path.dsv
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/environment/path.sh
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/environment/path.dsv
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/local_setup.bash
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/local_setup.sh
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/local_setup.zsh
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/local_setup.dsv
+[0.053s] -- Installing: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/package.dsv
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/ament_index/resource_index/packages/viewpoint_manager
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/cmake/viewpoint_managerConfig.cmake
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/cmake/viewpoint_managerConfig-version.cmake
+[0.053s] -- Up-to-date: /home/airlab/osep_path_planner/install/viewpoint_manager/share/viewpoint_manager/package.xml
+[0.054s] Invoked command in '/home/airlab/osep_path_planner/build/viewpoint_manager' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/viewpoint_manager

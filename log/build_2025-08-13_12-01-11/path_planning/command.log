@@ -1,0 +1,4 @@
+Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/path_planning -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/path_planning
+Invoked command in '/home/airlab/osep_path_planner/build/path_planning' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/airlab/osep_path_planner/src/path_planning -DCMAKE_INSTALL_PREFIX=/home/airlab/osep_path_planner/install/path_planning
+Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/path_planning -- -j8 -l8
+Invoked command in '/home/airlab/osep_path_planner/build/path_planning' returned '2': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/path_planning -- -j8 -l8

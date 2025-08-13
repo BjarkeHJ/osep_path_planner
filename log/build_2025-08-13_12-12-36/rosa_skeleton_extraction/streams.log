@@ -1,0 +1,26 @@
+[0.010s] Invoking command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/rosa_skeleton_extraction -- -j8 -l8
+[0.046s] [35m[1mConsolidate compiler generated dependencies of target rosa_skeleton_extraction[0m
+[0.071s] [ 25%] [32mBuilding CXX object CMakeFiles/rosa_skeleton_extraction.dir/src/extract_tools.cpp.o[0m
+[1.301s] [ 50%] [32m[1mLinking CXX executable rosa_skeleton_extraction[0m
+[5.228s] [100%] Built target rosa_skeleton_extraction
+[5.235s] Invoked command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/rosa_skeleton_extraction -- -j8 -l8
+[5.236s] Invoking command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/rosa_skeleton_extraction
+[5.241s] -- Install configuration: ""
+[5.241s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/lib/rosa_skeleton_extraction/rosa_skeleton_extraction
+[5.249s] -- Set runtime path of "/home/airlab/osep_path_planner/install/rosa_skeleton_extraction/lib/rosa_skeleton_extraction/rosa_skeleton_extraction" to ""
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/ament_index/resource_index/package_run_dependencies/rosa_skeleton_extraction
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/ament_index/resource_index/parent_prefix_path/rosa_skeleton_extraction
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/environment/ament_prefix_path.sh
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/environment/ament_prefix_path.dsv
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/environment/path.sh
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/environment/path.dsv
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/local_setup.bash
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/local_setup.sh
+[5.249s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/local_setup.zsh
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/local_setup.dsv
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/package.dsv
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/ament_index/resource_index/packages/rosa_skeleton_extraction
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/cmake/rosa_skeleton_extractionConfig.cmake
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/cmake/rosa_skeleton_extractionConfig-version.cmake
+[5.250s] -- Installing: /home/airlab/osep_path_planner/install/rosa_skeleton_extraction/share/rosa_skeleton_extraction/package.xml
+[5.252s] Invoked command in '/home/airlab/osep_path_planner/build/rosa_skeleton_extraction' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/rosa_skeleton_extraction

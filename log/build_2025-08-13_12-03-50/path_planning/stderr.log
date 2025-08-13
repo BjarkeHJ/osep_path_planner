@@ -1,0 +1,13 @@
+[01m[K/home/airlab/osep_path_planner/src/path_planning/src/planner_node.cpp:7:10:[m[K [01;31m[Kfatal error: [m[Kplanner_main.hpp: No such file or directory
+    7 | #include [01;31m[K"planner_main.hpp"[m[K
+      |          [01;31m[K^~~~~~~~~~~~~~~~~~[m[K
+[01m[K/home/airlab/osep_path_planner/src/path_planning/src/planner_main.cpp:9:10:[m[K [01;31m[Kfatal error: [m[Kplanner_main.hpp: No such file or directory
+    9 | #include [01;31m[K"planner_main.hpp"[m[K
+      |          [01;31m[K^~~~~~~~~~~~~~~~~~[m[K
+compilation terminated.
+compilation terminated.
+gmake[2]: *** [CMakeFiles/path_planning.dir/build.make:76: CMakeFiles/path_planning.dir/src/planner_node.cpp.o] Error 1
+gmake[2]: *** Waiting for unfinished jobs....
+gmake[2]: *** [CMakeFiles/path_planning.dir/build.make:90: CMakeFiles/path_planning.dir/src/planner_main.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/path_planning.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

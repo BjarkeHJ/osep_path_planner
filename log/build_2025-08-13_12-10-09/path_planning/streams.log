@@ -1,0 +1,26 @@
+[0.014s] Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/path_planning -- -j8 -l8
+[0.060s] [ 33%] [32mBuilding CXX object CMakeFiles/path_planning.dir/src/planner_main.cpp.o[0m
+[0.060s] [ 66%] [32mBuilding CXX object CMakeFiles/path_planning.dir/src/planner_node.cpp.o[0m
+[17.557s] [100%] [32m[1mLinking CXX executable path_planning[0m
+[19.346s] [100%] Built target path_planning
+[19.354s] Invoked command in '/home/airlab/osep_path_planner/build/path_planning' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/airlab/osep_path_planner/build/path_planning -- -j8 -l8
+[19.355s] Invoking command in '/home/airlab/osep_path_planner/build/path_planning': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/path_planning
+[19.361s] -- Install configuration: ""
+[19.361s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/lib/path_planning/path_planning
+[19.366s] -- Set runtime path of "/home/airlab/osep_path_planner/install/path_planning/lib/path_planning/path_planning" to ""
+[19.366s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/ament_index/resource_index/package_run_dependencies/path_planning
+[19.366s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/ament_index/resource_index/parent_prefix_path/path_planning
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/environment/ament_prefix_path.sh
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/environment/ament_prefix_path.dsv
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/environment/path.sh
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/environment/path.dsv
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/local_setup.bash
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/local_setup.sh
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/local_setup.zsh
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/local_setup.dsv
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/package.dsv
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/ament_index/resource_index/packages/path_planning
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/cmake/path_planningConfig.cmake
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/cmake/path_planningConfig-version.cmake
+[19.367s] -- Installing: /home/airlab/osep_path_planner/install/path_planning/share/path_planning/package.xml
+[19.370s] Invoked command in '/home/airlab/osep_path_planner/build/path_planning' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/airlab/osep_path_planner/build/path_planning
