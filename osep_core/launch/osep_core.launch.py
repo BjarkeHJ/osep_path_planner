@@ -25,7 +25,6 @@ def generate_launch_description():
             name="planner",
             output="screen",
             parameters=[
-                {"obstacle_threshold": 50},
                 {"frame_id": FRAME_ID},
                 {"interpolation_distance": 3.0},
                 {"costmap_topic": "/local_costmap/costmap"},

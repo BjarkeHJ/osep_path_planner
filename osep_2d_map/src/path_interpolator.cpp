@@ -11,7 +11,6 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 PathInterpolator::PathInterpolator() : Node("planner") {
-	this->declare_parameter<int>("obstacle_threshold", 50);
 	this->declare_parameter<std::string>("frame_id", "base_link");
 	this->declare_parameter<double>("interpolation_distance", 2.0);
 	this->declare_parameter<std::string>("costmap_topic", "/local_costmap/costmap");
@@ -20,7 +19,6 @@ PathInterpolator::PathInterpolator() : Node("planner") {
 	this->declare_parameter<int>("ground_truth_update_interval", 2000);
 	this->declare_parameter<double>("extra_safety_distance", 1.0);
 
-	obstacle_threshold_ = this->get_parameter("obstacle_threshold").as_int();
 	frame_id_ = this->get_parameter("frame_id").as_string();
 	interpolation_distance_ = this->get_parameter("interpolation_distance").as_double();
 	std::string costmap_topic = this->get_parameter("costmap_topic").as_string();

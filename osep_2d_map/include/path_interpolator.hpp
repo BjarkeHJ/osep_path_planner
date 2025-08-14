@@ -30,6 +30,8 @@ public:
     PathInterpolator();
 
 private:
+    static constexpr int obstacle_threshold_ = 50;
+
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr waypoints_sub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr viewpoints_adjusted_pub_;
@@ -40,7 +42,6 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     nav_msgs::msg::OccupancyGrid::SharedPtr costmap_;
     nav_msgs::msg::Path adjusted_waypoints_;
-    int obstacle_threshold_;
     std::string frame_id_;
     double interpolation_distance_;
     rclcpp::TimerBase::SharedPtr ground_truth_timer_;
