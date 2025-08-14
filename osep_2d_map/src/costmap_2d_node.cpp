@@ -55,6 +55,16 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
 
 void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg)
 {
+  // Check for required fields before converting
+  if (esdf_msg->fields.size() < 4 ||
+      esdf_msg->fields[0].name != "x" ||
+      esdf_msg->fields[1].name != "y" ||
+      esdf_msg->fields[2].name != "z" ||
+      esdf_msg->fields[3].name != "intensity") {
+      RCLCPP_WARN(this->get_logger(), "PointCloud2 does not have expected fields!");
+      return;
+  }
+
   // Convert the PointCloud2 message to a PCL point cloud
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
   pcl::fromROSMsg(*esdf_msg, *cloud);

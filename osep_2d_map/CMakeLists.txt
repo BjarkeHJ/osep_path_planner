@@ -12,8 +12,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(EXEC_NAME osep_2d_map)
-
 # ROS2 dependencies
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
@@ -39,18 +37,26 @@ set(dependencies
     pcl_conversions
     pcl_ros)
 
-add_executable(${EXEC_NAME}
-                src/costmap_2d_node.cpp)
 
-target_include_directories(${EXEC_NAME} PUBLIC
-                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                            $<INSTALL_INTERFACE:include>
-                            ${PCL_INCLUDE_DIRS})
+# Build costmap_2d_node executable
+add_executable(costmap_2d_node src/costmap_2d_node.cpp)
+target_include_directories(costmap_2d_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${PCL_INCLUDE_DIRS})
+target_link_libraries(costmap_2d_node ${PCL_LIBRARIES} Eigen3::Eigen)
+ament_target_dependencies(costmap_2d_node ${dependencies})
 
-target_link_libraries(${EXEC_NAME} ${PCL_LIBRARIES} Eigen3::Eigen)
-ament_target_dependencies(${EXEC_NAME} ${dependencies})
+# Build path_interpolator_node executable
+add_executable(path_interpolator_node src/path_interpolator.cpp)
+target_include_directories(path_interpolator_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${PCL_INCLUDE_DIRS})
+target_link_libraries(path_interpolator_node ${PCL_LIBRARIES} Eigen3::Eigen)
+ament_target_dependencies(path_interpolator_node ${dependencies})
 
-install(TARGETS ${EXEC_NAME} DESTINATION lib/${PROJECT_NAME})
+install(TARGETS costmap_2d_node path_interpolator_node DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
