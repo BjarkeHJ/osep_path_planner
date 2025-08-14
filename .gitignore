@@ -34,7 +34,7 @@ log/
 Thumbs.db
 
 # VSCode
-.vscode/
+.vscode
 
 # ISAAC
 isaac_ros_assets/
