@@ -27,38 +27,54 @@ struct PlannerNode {
 
 class PathInterpolator : public rclcpp::Node {
 public:
+    // --- Constructor ---
     PathInterpolator();
 
 private:
+    // --- ROS2 Subscriptions ---
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr waypoints_sub_;
+
+    // --- ROS2 Publishers ---
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr viewpoints_adjusted_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr raw_path_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr smoothed_path_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr ground_truth_trajectory_pub_;
+
+    // --- Timers ---
+    rclcpp::TimerBase::SharedPtr ground_truth_timer_;
+
+    // --- TF2 ---
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    // --- Map and Path Data ---
     nav_msgs::msg::OccupancyGrid::SharedPtr costmap_;
     nav_msgs::msg::Path adjusted_waypoints_;
-    int obstacle_threshold_;
-    std::string frame_id_;
-    double interpolation_distance_;
-    rclcpp::TimerBase::SharedPtr ground_truth_timer_;
     nav_msgs::msg::Path ground_truth_trajectory_;
+
+    // --- Parameters and State ---
+    std::string frame_id_;
+    static constexpr int obstacle_threshold_ = 50;
+    double interpolation_distance_;
     bool path_invalid_flag_ = false;
+    double safety_distance_;
     double extra_safety_distance_;
 
+    // --- Callbacks ---
     void costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
     void waypointsCallback(const nav_msgs::msg::Path::SharedPtr msg);
-    geometry_msgs::msg::PoseStamped getCurrentPosition();
     void updateGroundTruthTrajectory();
+    void planAndPublishPath();
+
+    // --- Utility Methods ---
+    geometry_msgs::msg::PoseStamped getCurrentPosition();
     std::pair<geometry_msgs::msg::PoseStamped, bool> adjustWaypointForCollision(
         const geometry_msgs::msg::PoseStamped &waypoint, float distance, float resolution, int max_attempts);
     tf2::Quaternion interpolateYaw(
         const geometry_msgs::msg::Pose &start_pose,
         const geometry_msgs::msg::Pose &goal_pose,
         float t);
-    void planAndPublishPath();
     std::vector<geometry_msgs::msg::PoseStamped> planPath(
         const geometry_msgs::msg::PoseStamped &start,
         const geometry_msgs::msg::PoseStamped &goal);
