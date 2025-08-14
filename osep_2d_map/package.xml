@@ -1,26 +1,16 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>osep_core</name>
+  <name>osep_2d_map</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="bjarke_holm@hotmail.com">airlab</maintainer>
+  <maintainer email="kasperhansen1998@hotmail.com">airlab</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
-
-  <exec_depend>pcl_conversions</exec_depend>
-
-<!-- Local dependencies -->
-  <exec_depend>osep_data_publisher</exec_depend>
-  <exec_depend>osep_skeleton_decomp</exec_depend>
-  <exec_depend>osep_viewpoint_manager</exec_depend>
-  <exec_depend>osep_planning</exec_depend>
-  <exec_depend>osep_rosa</exec_depend>
-  <exec_depend>osep_2d_map</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
