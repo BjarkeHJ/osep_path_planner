@@ -14,18 +14,20 @@
 
 class ESDF2dCostMapNode : public rclcpp::Node {
 public:
+  // --- Constructor ---
   ESDF2dCostMapNode();
 
 private:
+  // --- Callback Methods ---
   void esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg);
 
-  // Parameters and computed values
+  // --- Parameters and Computed Values ---
+  int local_grid_size_;
+  int global_grid_size_;
   double resolution_;
   double free_center_radius_;
   double local_map_size_;
   double global_map_size_;
-  int local_grid_size_;
-  int global_grid_size_;
   double local_half_size_;
   double global_half_size_;
   double safety_distance_;
@@ -33,15 +35,15 @@ private:
   double safety_distance_max_;
   std::string frame_id_;
 
-  // TF2 buffer and listener
+  // --- TF2 Buffer and Listener ---
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 
-  // ROS publisher and subscriber
+  // --- ROS Publishers and Subscribers ---
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr esdf_sub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr global_map_pub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr local_map_pub_;
 
-  // Global map
+  // --- Global Map ---
   nav_msgs::msg::OccupancyGrid global_map_;
 };

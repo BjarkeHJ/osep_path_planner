@@ -17,7 +17,7 @@ PathInterpolator::PathInterpolator() : Node("planner") {
 	this->declare_parameter<std::string>("waypoints_topic", "/oscep/waypoints");
 	this->declare_parameter<std::string>("path_planner_prefix", "/planner");
 	this->declare_parameter<int>("ground_truth_update_interval", 2000);
-	this->declare_parameter<double>("extra_safety_distance", 1.0);
+	this->declare_parameter<double>("safety_distance", 10.0);
 
 	frame_id_ = this->get_parameter("frame_id").as_string();
 	interpolation_distance_ = this->get_parameter("interpolation_distance").as_double();
@@ -25,7 +25,8 @@ PathInterpolator::PathInterpolator() : Node("planner") {
 	std::string waypoints_topic = this->get_parameter("waypoints_topic").as_string();
 	std::string path_planner_prefix = this->get_parameter("path_planner_prefix").as_string();
 	int ground_truth_update_interval = this->get_parameter("ground_truth_update_interval").as_int();
-	extra_safety_distance_ = this->get_parameter("extra_safety_distance").as_double();
+	safety_distance_ = this->get_parameter("safety_distance").as_double();
+	extra_safety_distance_ = 0.1 * safety_distance_;
 
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
