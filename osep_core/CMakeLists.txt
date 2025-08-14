@@ -6,6 +6,8 @@ find_package(osep_planning REQUIRED)
 find_package(osep_data_publisher REQUIRED)
 find_package(osep_rosa REQUIRED)
 
+find_package(pcl_conversions REQUIRED)
+
 install(DIRECTORY launch
     DESTINATION share/${PROJECT_NAME})
 
