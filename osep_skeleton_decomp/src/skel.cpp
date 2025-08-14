@@ -1,0 +1,5 @@
+/* 
+
+Main algorithm for incremental skeletonization
+
+*/

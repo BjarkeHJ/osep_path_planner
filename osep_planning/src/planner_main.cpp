@@ -6,8 +6,8 @@ This file contains the incremental point cloud incrementation
 
 */
 
-#include "path_planning/planner_main.hpp"
-// #include "planner_main.hpp"
+// #include "osep_planning/planner_main.hpp"
+#include "planner_main.hpp"
 
 PathPlanner::PathPlanner(rclcpp::Node::SharedPtr node) : node_(node)
 {

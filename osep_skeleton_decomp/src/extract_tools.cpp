@@ -1,4 +1,4 @@
-#include "rosa_skeleton_extraction/extract_tools.hpp"
+#include "extract_tools.hpp"
 
 Eigen::MatrixXd ExtractTools::rows_ext_V(Eigen::VectorXi ind, Eigen::MatrixXd matrix){
 	Eigen::MatrixXd zs1(ind.size(), 1);

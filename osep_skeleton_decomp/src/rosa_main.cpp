@@ -7,8 +7,7 @@ for Planar Surfaces
 
 */
 
-// #include <rosa_main.hpp>
-#include <rosa_skeleton_extraction/rosa_main.hpp>
+#include "rosa_main.hpp"
 
 SkelEx::SkelEx(rclcpp::Node::SharedPtr node) : node_(node) 
 {
@@ -28,8 +27,6 @@ void SkelEx::init() {
 
 void SkelEx::main() {
     auto t_start = std::chrono::high_resolution_clock::now();
-
-    // Implement so drone need to be close before starting to plan??
 
     distance_filter();
     pcd_size_ = SS.pts_->points.size();

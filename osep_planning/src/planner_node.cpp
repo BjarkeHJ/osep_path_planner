@@ -4,8 +4,7 @@ Path Planner Node
 
 */
 
-#include "path_planning/planner_main.hpp"
-// #include "planner_main.hpp"
+#include "planner_main.hpp"
 
 #include <chrono>
 #include <rclcpp/rclcpp.hpp>

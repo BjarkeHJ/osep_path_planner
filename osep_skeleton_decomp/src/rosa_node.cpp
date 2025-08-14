@@ -7,7 +7,10 @@ TODO:
 
 
 */
-#include <rosa_skeleton_extraction/rosa_main.hpp>
+
+
+#include "rosa_main.hpp"
+
 #include <chrono>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
@@ -150,7 +153,6 @@ void SkeletonExtractionNode::run() {
         catch (tf2::TransformException &ex) {
             RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
         }
-
     }
 }
 

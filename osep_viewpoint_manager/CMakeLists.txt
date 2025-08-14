@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 cmake_policy(SET CMP0074 NEW)
-project(osep_rosa)
-
-# if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-#   add_compile_options(-Wall -Wextra -Wpedantic)
-# endif()
+project(osep_viewpoint_manager)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++17")
@@ -12,7 +8,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(EXEC_NAME osep_rosa)
+set(EXEC_NAME osep_viewpoint_manager)
 
 # ROS2 dependencies
 find_package(ament_cmake REQUIRED)
@@ -37,9 +33,8 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 
 add_executable(${EXEC_NAME}
-                src/rosa_node.cpp
-                src/rosa_main.cpp
-                src/extract_tools.cpp)
+                src/viewpoint_node.cpp
+                src/viewpoint_main.cpp)
 
 target_include_directories(${EXEC_NAME} PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -1,7 +1,7 @@
 #ifndef ROSA_MAIN_HPP_
 #define ROSA_MAIN_HPP_
 
-#include "rosa_skeleton_extraction/extract_tools.hpp"
+#include "extract_tools.hpp"
 
 #include <algorithm>
 #include <random>
@@ -25,7 +25,7 @@ struct Vector3dCompare // lexicographic ordering: return true if v1 is ordered B
         return v1(2) < v2(2); // Only if y1 = y2
     }
 };
-
+ 
 struct SkeletonStructure {
     pcl::PointCloud<pcl::PointXYZ>::Ptr pts_;
     pcl::PointCloud<pcl::Normal>::Ptr normals_;
