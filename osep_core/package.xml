@@ -12,9 +12,10 @@
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
-  <depend>osep_planning</depend>
-  <depend>osep_data_publisher</depend>
-  <depend>osep_rosa</depend>
+<!-- Local dependencies -->
+  <exec_depend>osep_planning</exec_depend>
+  <exec_depend>osep_data_publisher</exec_depend>
+  <exec_depend>osep_rosa</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
