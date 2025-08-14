@@ -12,6 +12,8 @@
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <exec_depend>pcl_conversions</exec_depend>
+
 <!-- Local dependencies -->
   <exec_depend>osep_planning</exec_depend>
   <exec_depend>osep_data_publisher</exec_depend>
