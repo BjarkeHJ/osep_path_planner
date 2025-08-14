@@ -50,13 +50,6 @@ ament_target_dependencies(${EXEC_NAME} ${dependencies})
 
 install(TARGETS ${EXEC_NAME} DESTINATION lib/${PROJECT_NAME})
 
-install(
-  DIRECTORY include/
-  DESTINATION include
-)
-ament_export_include_directories(include)
-ament_export_dependencies(${dependencies})
-
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
