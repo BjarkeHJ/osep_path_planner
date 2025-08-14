@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(data_publisher)
+project(osep_planning)
 cmake_policy(SET CMP0074 NEW)
 
 # if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -12,34 +12,50 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(EXEC_NAME data_publisher)
+set(EXEC_NAME osep_planning)
 
+# ROS2 dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
+# Dependencies list
 set(dependencies
     rclcpp
+    pcl_conversions
     sensor_msgs
-    pcl_conversions)
+    visualization_msgs
+    geometry_msgs
+    nav_msgs)
 
+# Other libraries
+find_package(Eigen3 REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 
 add_executable(${EXEC_NAME}
-              src/lidar_pub_node.cpp)
+                src/planner_node.cpp
+                src/planner_main.cpp)
 
 target_include_directories(${EXEC_NAME} PUBLIC
-                          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                          $<INSTALL_INTERFACE:include>
-                          ${PCL_INCLUDE_DIRS})
+                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                            $<INSTALL_INTERFACE:include>
+                            ${PCL_INCLUDE_DIRS})
 
-target_link_libraries(${EXEC_NAME} 
-                      ${PCL_LIBRARIES})
-
+target_link_libraries(${EXEC_NAME} ${PCL_LIBRARIES} Eigen3::Eigen)
 ament_target_dependencies(${EXEC_NAME} ${dependencies})
 
 install(TARGETS ${EXEC_NAME} DESTINATION lib/${PROJECT_NAME})
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+ament_export_include_directories(include)
+ament_export_dependencies(${dependencies})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
