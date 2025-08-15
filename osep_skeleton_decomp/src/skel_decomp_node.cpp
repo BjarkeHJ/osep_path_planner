@@ -7,7 +7,6 @@ ROS 2 Node: ROSA Point Computation and Incremental Skeleton
 #include "rosa.hpp"
 
 #include <mutex>
-#include <chrono>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -34,10 +33,12 @@ private:
     int tick_ms_; 
 
     /* Utils */
+    std::unique_ptr<Rosa> rosa_;
     std::mutex latest_mutex_;
-    
+
     /* Data */
     sensor_msgs::msg::PointCloud2::ConstSharedPtr latest_msg_;
+    RosaConfig rosa_cfg;
 
 };
 
@@ -45,8 +46,14 @@ SkeletonExtractionNode::SkeletonExtractionNode() : Node("SkeletonExtractionNode"
     // DECLARE LAUNCH FILE PARAMETERS HERE
     topic_prefix_ = declare_parameter<std::string>("topic_prefix", "/osep");
     tick_ms_ = declare_parameter<int>("tick_ms", 50);
+    rosa_cfg.max_points = declare_parameter<int>("rosa_max_points", 500);
+    rosa_cfg.est_vertices = declare_parameter<int>("rosa_est_vertice", 50);
+    rosa_cfg.pts_dist_lim = declare_parameter<float>("rosa_point_dist_lim", 50);
+    rosa_cfg.ne_knn = declare_parameter<int>("rosa_ne_knn", 20);
+    rosa_cfg.vg_ds_size = declare_parameter<float>("rosa_vg_ds_size", 0.3);
 
     // Initialize objects (rosa, gskel etc...) and parse parameters to their constructors
+    rosa_ = std::make_unique<Rosa>(rosa_cfg);
 
     auto qos = rclcpp::SensorDataQoS(); 
     qos.keep_last(1);
@@ -56,7 +63,7 @@ SkeletonExtractionNode::SkeletonExtractionNode() : Node("SkeletonExtractionNode"
                                                                         this,
                                                                         std::placeholders::_1));
     
-    tick_timer_ = create_wall_timer(std::chrono::milliseconds(50),
+    tick_timer_ = create_wall_timer(std::chrono::milliseconds(tick_ms_),
                                     std::bind(&SkeletonExtractionNode::process_tick, this));
 
     RCLCPP_INFO(this->get_logger(), "SkeletonExtractionNode Initialized");
@@ -76,9 +83,13 @@ void SkeletonExtractionNode::process_tick() {
         latest_msg_.reset();
     }
     if (!msg) return;
-    pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(*msg, cloud);
-    // Process data with ROSA CLASS (rosa->process()) return final vertices
+
+    pcl::fromROSMsg(*msg, rosa_->input_cloud());
+    // Throw if no correct message??
+
+    if (rosa_->rosa_run()) {
+        // TODO: Parse to incremental skeleton manager...
+    }
 
     // Lookup transform for "msg"
 
