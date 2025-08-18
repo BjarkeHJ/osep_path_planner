@@ -108,4 +108,10 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr pset_cloud;
 };
 
+
+
+
+
 #endif //SKEL_MAIN_HPP_
+
+

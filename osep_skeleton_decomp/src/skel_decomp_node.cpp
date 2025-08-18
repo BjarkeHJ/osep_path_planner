@@ -47,10 +47,13 @@ SkeletonExtractionNode::SkeletonExtractionNode() : Node("SkeletonExtractionNode"
     topic_prefix_ = declare_parameter<std::string>("topic_prefix", "/osep");
     tick_ms_ = declare_parameter<int>("tick_ms", 50);
     rosa_cfg.max_points = declare_parameter<int>("rosa_max_points", 500);
-    rosa_cfg.est_vertices = declare_parameter<int>("rosa_est_vertice", 50);
-    rosa_cfg.pts_dist_lim = declare_parameter<float>("rosa_point_dist_lim", 50);
+    rosa_cfg.pts_dist_lim = declare_parameter<float>("rosa_point_dist_lim", 50.0f);
     rosa_cfg.ne_knn = declare_parameter<int>("rosa_ne_knn", 20);
-    rosa_cfg.vg_ds_size = declare_parameter<float>("rosa_vg_ds_size", 0.3);
+    rosa_cfg.nb_knn = declare_parameter<int>("rosa_nb_knn", 10);
+    rosa_cfg.max_proj_range = declare_parameter<float>("rosa_max_projection_range", 10.0f);
+    rosa_cfg.niter_drosa = declare_parameter<int>("rosa_niter_drosa", 3);
+    rosa_cfg.niter_dcrosa = declare_parameter<int>("rosa_niter_dcrosa", 2);
+
 
     // Initialize objects (rosa, gskel etc...) and parse parameters to their constructors
     rosa_ = std::make_unique<Rosa>(rosa_cfg);

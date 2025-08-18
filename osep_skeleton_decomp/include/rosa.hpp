@@ -5,24 +5,35 @@
 #include <pcl/common/common.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/voxel_grid.h>
+#include <Eigen/Core>
+#include <Eigen/Eigenvalues>
 
 struct RosaConfig {
     int max_points;
-    int est_vertices;
     float pts_dist_lim; 
     int ne_knn;
-    float vg_ds_size;
+    int nb_knn;
+    float max_proj_range;
+    
+    int niter_drosa;
+    int niter_dcrosa;
 };
 
 struct CloudData {
     pcl::PointCloud<pcl::PointXYZ>::Ptr orig_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr pts_;
     pcl::PointCloud<pcl::Normal>::Ptr nrms_;
+
+    std::vector<std::vector<int>> surf_nbs;
+    std::vector<std::vector<int>> simi_nbs;
+
+    Eigen::MatrixXd skelver;
+    
     size_t pcd_size_;
 };
 
 struct RosaResult {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr vertices_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr vertices;
 };
 
 class Rosa {
@@ -34,20 +45,40 @@ public:
 private:
     /* Functions */
     void preprocess();
+    void rosa_init();
+    void similarity_neighbor_extraction();
+    void drosa();
+    void dcrosa();
+    void vertex_sampling();
+    void vertex_smooth();
 
+    /* Member Helpers */
+    std::vector<int> compute_active_samples(const int seed, const Eigen::Vector3f& p, const Eigen::Vector3f& n);
+    float similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& v1, const Eigen::Vector3f& p2, const Eigen::Vector3f& v2, float range_r, float scale=5.0f);
+    Eigen::Vector3f compute_symmetrynormal(const std::vector<int>& idxs);
+    float symmnormal_variance(Eigen::Vector3f& symm_nrm, std::vector<int>& idxs);
+    Eigen::Vector3f cov_eigs_from_normals(const std::vector<int>& idxs);
+    Eigen::Vector3f closest_projection_point(const std::vector<int>& idxs);
+    bool local_line_fit(const std::vector<int>& nb, Eigen::Vector3f& mean_out, Eigen::Vector3f& dir_out, float& conf_out, const int min_nb);
 
     /* Params */
     RosaConfig cfg_;
+    float leaf_size;
 
     /* Utils */
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne_;
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr ne_tree_{new pcl::search::KdTree<pcl::PointXYZ>};
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr kd_tree_{new pcl::search::KdTree<pcl::PointXYZ>};
     pcl::VoxelGrid<pcl::PointNormal> vgf_;
 
     /* Data */
     CloudData CD;
     RosaResult RR;
+    Eigen::MatrixXf pset;
+    Eigen::MatrixXf vset;
+    Eigen::MatrixXf vvar;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pset_cloud;
 
+    // Temporaries for moving large clouds
     pcl::PointCloud<pcl::PointXYZ>::Ptr tmp_pt_;
     pcl::PointCloud<pcl::Normal>::Ptr tmp_nrm_;
     pcl::PointCloud<pcl::PointNormal>::Ptr tmp_pn_;
@@ -55,5 +86,48 @@ private:
     
 
 };
+
+/* HELPER FUNCTION */
+inline float estimate_leaf_from_bbox(const pcl::PointCloud<pcl::PointXYZ>& cloud, size_t target) {
+    if (cloud.empty() || target == 0) return 0.0f;
+
+    pcl::PointXYZ minp, maxp;
+    pcl::getMinMax3D(cloud, minp, maxp);
+    const float dx = std::max(1e-6f, maxp.x - minp.x);
+    const float dy = std::max(1e-6f, maxp.y - minp.y);
+    const float dz = std::max(1e-6f, maxp.z - minp.z);
+    const float vol = dx * dy * dz;
+    float leaf = std::cbrtf(vol / std::max<float>(1.0, target));
+    return leaf;
+}
+
+
+using CloudMapXYZ = Eigen::Map<
+    Eigen::Matrix<float, 3, Eigen::Dynamic>,
+    0,
+    Eigen::InnerStride<sizeof(pcl::PointXYZ)/sizeof(float)>
+>;
+inline CloudMapXYZ mapCloud(pcl::PointCloud<pcl::PointXYZ>& cloud) {
+    float* base = cloud.empty() ? nullptr : &cloud.points[0].x;
+    return { base, 3, static_cast<int>(cloud.size()), Eigen::InnerStride<sizeof(pcl::PointXYZ)/sizeof(float)>() };
+}
+
+inline Eigen::Matrix3f create_orthonormal_frame(Eigen::Vector3f &v) {
+    const float n = v.norm();
+    if (n == 0.0) {
+        return Eigen::Vector3f::Identity();
+    }
+    const Eigen::Vector3f z = v / n;
+    // Picking a helper axis least aligned with vector z
+    Eigen::Vector3f a = (std::abs(z.x()) < 0.9) ? Eigen::Vector3f::UnitX() : Eigen::Vector3f::UnitY();
+    // Project onto the plane orthogonal to vector z
+    Eigen::Vector3f x = (a - a.dot(z) * z).normalized();
+    Eigen::Vector3f y = z.cross(x);
+    Eigen::Matrix3f M;
+    M.col(0) = x;
+    M.col(1) = y;
+    M.col(2) = z;
+    return M;
+}
 
 #endif // ROSA_HPP_
