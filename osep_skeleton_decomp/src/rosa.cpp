@@ -15,8 +15,8 @@ Rosa::Rosa(const RosaConfig& cfg) : cfg_(cfg) {
 
     CD.surf_nbs.reserve(cfg.max_points);
 
-    RR.skelver.reset(new pcl::PointCloud<pcl::PointXYZ>);
-    RR.skelver->points.reserve(100);
+    RR.vertices.reset(new pcl::PointCloud<pcl::PointXYZ>);
+    RR.vertices->points.reserve(100);
 
     tmp_pt_.reset(new pcl::PointCloud<pcl::PointXYZ>);
     tmp_pt_->points.reserve(10000);
@@ -42,7 +42,7 @@ void Rosa::preprocess() {
     auto pp_ts = std::chrono::high_resolution_clock::now();
     CD.pts_->clear();
     CD.nrms_->clear();
-    RR.skelver->clear();
+    RR.vertices->clear();
 
     if (CD.orig_->points.empty()) {
         return;
