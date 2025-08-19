@@ -27,7 +27,7 @@ def generate_launch_description():
             output="screen",
             parameters=[
                 {"frame_id": FRAME_ID},
-                {"interpolation_distance": 1.0},
+                {"interpolation_distance": 2.0},
                 {"costmap_topic": "/local_costmap/costmap"},
                 {"waypoints_topic": "/osep/viewpoints"},
                 {"path_planner_prefix": "/planner"},
