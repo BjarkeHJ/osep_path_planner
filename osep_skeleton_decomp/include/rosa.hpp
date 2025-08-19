@@ -17,6 +17,9 @@ struct RosaConfig {
     
     int niter_drosa;
     int niter_dcrosa;
+    int niter_smooth;
+    float alpha_recenter;
+    float radius_smooth;
 };
 
 struct CloudData {

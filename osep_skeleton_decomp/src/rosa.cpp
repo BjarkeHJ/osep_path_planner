@@ -471,9 +471,112 @@ void Rosa::vertex_sampling() {
     }
     
     // EXPORT CORRESP IF NEEDED DOWNSTREAM... (CD.corresp or something...)
+
+    /* Recentering */
+
+    // Inverse correspondence map
+    std::vector<std::vector<int>> vertex_to_pts(CD.skelver.rows());
+    for (int i=0; i<CD.pcd_size_; ++i) {
+        int vid = corresp[i];
+        if (vid >= 0) {
+            vertex_to_pts[vid].push_back(i);
+        }
+    }
+
+    for (int i=0; i<CD.skelver.rows(); ++i) {
+        auto &idxs = vertex_to_pts[i];
+        if (idxs.empty()) continue;
+
+        Eigen::Vector3f sum = Eigen::Vector3f::Zero();
+        for (int idx : idxs) {
+            const auto& p = CD.pts_->points[idx];
+            sum += p.getVector3fMap();
+        }
+
+        Eigen::Vector3f eucl_center = sum / static_cast<float>(idxs.size());
+        Eigen::Vector3f current = CD.skelver.row(i);
+        CD.skelver.row(i) = (cfg_.alpha_recenter * current + (1.0 - cfg_.alpha_recenter) * eucl_center).transpose();
+    }
 }
 
+void Rosa::vertex_smooth() {
+    const int V = static_cast<int>(CD.skelver.rows());
+    tmp_pt_->resize(V);
+    tmp_pt_->clear();
+    
+    for (int i=0; i<V; ++i) {
+        tmp_pt_->points[i].x = CD.skelver(i,0);
+        tmp_pt_->points[i].y = CD.skelver(i,1);
+        tmp_pt_->points[i].z = CD.skelver(i,2);
+    }
 
+    kd_tree_->setInputCloud(tmp_pt_);
+
+    std::vector<std::vector<int>> neighbors(V);
+    {
+        std::vector<int> idx;
+        std::vector<float> dist2;
+        idx.reserve(64);
+        dist2.reserve(64);
+
+        for (int i=0; i<V; ++i) {
+            idx.clear();
+            dist2.clear();
+            pcl::PointXYZ& qp = tmp_pt_->points[i];
+            if (kd_tree_->radiusSearch(qp, cfg_.radius_smooth, idx, dist2) > 0) {
+                if (idx.empty() || idx[0] != i) {
+                    idx.insert(idx.begin(), i);
+                }
+                neighbors[i].assign(idx.begin(), idx.end());
+            }
+            else {
+                neighbors[i] = { i }; // fallback to self...
+            }
+        }
+    }
+
+    Eigen::MatrixXf cur = CD.skelver;
+    Eigen::MatrixXf next = CD.skelver;
+
+    for (int it=0; it<cfg_.niter_smooth; ++it) {
+        for (int i=0; i<V; ++i) {
+            const auto& nbr = neighbors[i];
+            const int n = static_cast<int>(nbr.size());
+            if (n <= 1) {
+                next.row(i) = cur.row(i);
+                continue;
+            }
+
+            Eigen::Vector3f mean = Eigen::Vector3f::Zero();
+            for (int j : nbr) {
+                mean += cur.row(j).transpose();
+            }
+            mean /= static_cast<float>(n);
+
+            Eigen::MatrixXf C = Eigen::Matrix3f::Zero();
+            for (int j : nbr) {
+                Eigen::Vector3f d = cur.row(j).transpose() - mean;
+                C.noalias() += d * d.transpose();
+            }
+            C /= static_cast<float>(n);
+
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es(C);
+            const Eigen::Vector3f principal_dir = es.eigenvectors().col(2);
+
+            // Project
+            const Eigen::Vector3f p = cur.row(i).transpose();
+            const Eigen::Vector3f delta = p - mean;
+            const Eigen::Vector3f proj = mean + principal_dir * (principal_dir.dot(delta));
+
+            // Fuse/Blend
+            const Eigen::Vector3f fused = cfg_.alpha_recenter * p + (1.0f - cfg_.alpha_recenter) * proj;
+            next.row(i) = fused.transpose();
+        }
+
+        cur.swap(next);
+    }
+    CD.skelver = cur;
+}
 
 
 /* HELPER FUNCTIONS */

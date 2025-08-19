@@ -53,7 +53,9 @@ SkeletonExtractionNode::SkeletonExtractionNode() : Node("SkeletonExtractionNode"
     rosa_cfg.max_proj_range = declare_parameter<float>("rosa_max_projection_range", 10.0f);
     rosa_cfg.niter_drosa = declare_parameter<int>("rosa_niter_drosa", 3);
     rosa_cfg.niter_dcrosa = declare_parameter<int>("rosa_niter_dcrosa", 2);
-
+    rosa_cfg.niter_smooth = declare_parameter<int>("rosa_niter_smooth", 5);
+    rosa_cfg.alpha_recenter = declare_parameter<float>("rosa_recenter_alpha", 0.3f);
+    rosa_cfg.radius_smooth = declare_parameter<float>("rosa_smooth_radius", 5.0f);
 
     // Initialize objects (rosa, gskel etc...) and parse parameters to their constructors
     rosa_ = std::make_unique<Rosa>(rosa_cfg);
