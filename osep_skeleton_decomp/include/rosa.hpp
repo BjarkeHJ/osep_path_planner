@@ -1,6 +1,7 @@
 #ifndef ROSA_HPP_
 #define ROSA_HPP_
 
+#include <iostream>
 #include <chrono>
 #include <pcl/common/common.h>
 #include <pcl/features/normal_3d.h>
@@ -8,8 +9,17 @@
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
+#define RUN_STEP(fn) \
+    do { \
+        bool ok = (fn)(); \
+        running = ok; \
+        std::cout << (ok ? "[SUCCESS] " : "[FAILED] ") << #fn << std::endl; \
+        if (!ok) return false; \
+    } while (0)
+
 struct RosaConfig {
     int max_points;
+    int min_points;
     float pts_dist_lim; 
     int ne_knn;
     int nb_knn;
@@ -22,7 +32,7 @@ struct RosaConfig {
     float radius_smooth;
 };
 
-struct CloudData {
+struct RosaData {
     pcl::PointCloud<pcl::PointXYZ>::Ptr orig_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr pts_;
     pcl::PointCloud<pcl::Normal>::Ptr nrms_;
@@ -30,34 +40,31 @@ struct CloudData {
     std::vector<std::vector<int>> surf_nbs;
     std::vector<std::vector<int>> simi_nbs;
 
-    Eigen::MatrixXd skelver;
+    Eigen::MatrixXf skelver;
     
     size_t pcd_size_;
-};
-
-struct RosaResult {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr vertices;
 };
 
 class Rosa {
 public:
     explicit Rosa(const RosaConfig& cfg);
     bool rosa_run();
-    pcl::PointCloud<pcl::PointXYZ>& input_cloud() { return *CD.orig_; } // Return mutable ref so node can write into preallocated buffer
+    pcl::PointCloud<pcl::PointXYZ>& input_cloud() { return *RD.orig_; } // Return mutable ref so node can write into preallocated buffer
+    Eigen::MatrixXf& output_vertices() { return RD.skelver; } // Return extracted skeleton vertices
 
 private:
     /* Functions */
-    void preprocess();
-    void rosa_init();
-    void similarity_neighbor_extraction();
-    void drosa();
-    void dcrosa();
-    void vertex_sampling();
-    void vertex_smooth();
+    bool preprocess();
+    bool rosa_init();
+    bool similarity_neighbor_extraction();
+    bool drosa();
+    bool dcrosa();
+    bool vertex_sampling();
+    bool vertex_smooth();
 
-    /* Member Helpers */
+    /* Helpers */
     std::vector<int> compute_active_samples(const int seed, const Eigen::Vector3f& p, const Eigen::Vector3f& n);
-    float similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& v1, const Eigen::Vector3f& p2, const Eigen::Vector3f& v2, float range_r, float scale=5.0f);
+    float similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& v1, const Eigen::Vector3f& p2, const Eigen::Vector3f& v2, const float range_r, const float scale=5.0f);
     Eigen::Vector3f compute_symmetrynormal(const std::vector<int>& idxs);
     float symmnormal_variance(Eigen::Vector3f& symm_nrm, std::vector<int>& idxs);
     Eigen::Vector3f cov_eigs_from_normals(const std::vector<int>& idxs);
@@ -67,6 +74,7 @@ private:
     /* Params */
     RosaConfig cfg_;
     float leaf_size;
+    bool running;
 
     /* Utils */
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne_;
@@ -74,8 +82,7 @@ private:
     pcl::VoxelGrid<pcl::PointNormal> vgf_;
 
     /* Data */
-    CloudData CD;
-    RosaResult RR;
+    RosaData RD;
     Eigen::MatrixXf pset;
     Eigen::MatrixXf vset;
     Eigen::MatrixXf vvar;
@@ -86,8 +93,6 @@ private:
     pcl::PointCloud<pcl::Normal>::Ptr tmp_nrm_;
     pcl::PointCloud<pcl::PointNormal>::Ptr tmp_pn_;
     pcl::PointCloud<pcl::PointNormal>::Ptr tmp_pn_ds_;
-    
-
 };
 
 /* HELPER FUNCTION */
@@ -118,7 +123,7 @@ inline CloudMapXYZ mapCloud(pcl::PointCloud<pcl::PointXYZ>& cloud) {
 inline Eigen::Matrix3f create_orthonormal_frame(Eigen::Vector3f &v) {
     const float n = v.norm();
     if (n == 0.0) {
-        return Eigen::Vector3f::Identity();
+        return Eigen::Matrix3f::Identity();
     }
     const Eigen::Vector3f z = v / n;
     // Picking a helper axis least aligned with vector z

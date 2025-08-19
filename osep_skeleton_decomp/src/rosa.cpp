@@ -2,21 +2,23 @@
 
 Main algorithm for local ROSA Point computation
 
+----- Notes -----
+Consider normalization of point cloud data prior to processing (for ease of parameter tuning)
+OBS: de-normalize before returning...
+
+
 */
 
 #include <rosa.hpp>
 
 Rosa::Rosa(const RosaConfig& cfg) : cfg_(cfg) {
-    CD.orig_.reset(new pcl::PointCloud<pcl::PointXYZ>);
-    CD.pts_.reset(new pcl::PointCloud<pcl::PointXYZ>);
-    CD.nrms_.reset(new pcl::PointCloud<pcl::Normal>);
-    CD.pts_->points.reserve(cfg.max_points);
-    CD.nrms_->points.reserve(cfg.max_points);
+    RD.orig_.reset(new pcl::PointCloud<pcl::PointXYZ>);
+    RD.pts_.reset(new pcl::PointCloud<pcl::PointXYZ>);
+    RD.nrms_.reset(new pcl::PointCloud<pcl::Normal>);
+    RD.pts_->points.reserve(cfg.max_points);
+    RD.nrms_->points.reserve(cfg.max_points);
 
-    CD.surf_nbs.reserve(cfg.max_points);
-
-    RR.vertices.reset(new pcl::PointCloud<pcl::PointXYZ>);
-    RR.vertices->points.reserve(100);
+    RD.surf_nbs.reserve(cfg.max_points);
 
     tmp_pt_.reset(new pcl::PointCloud<pcl::PointXYZ>);
     tmp_pt_->points.reserve(10000);
@@ -26,60 +28,72 @@ Rosa::Rosa(const RosaConfig& cfg) : cfg_(cfg) {
     tmp_pn_->points.reserve(10000);
     tmp_pn_ds_.reset(new pcl::PointCloud<pcl::PointNormal>);
     tmp_pn_ds_->points.reserve(cfg_.max_points);
+
+    running = 1;
 }
 
 bool Rosa::rosa_run() {
-    preprocess();
-    rosa_init();
-    similarity_neighbor_extraction();
-    drosa();
-    dcrosa();
+    auto ts = std::chrono::high_resolution_clock::now();
+    std::cout << "PointCloud size before downsampling: " << (int)RD.orig_->points.size() << std::endl;
+    RUN_STEP(preprocess);
+    std::cout << "PointCloud size after downsampling: " << (int)RD.pcd_size_ << std::endl;
+    RUN_STEP(rosa_init);
+    RUN_STEP(similarity_neighbor_extraction);
+    RUN_STEP(drosa);
+    RUN_STEP(dcrosa);
+    RUN_STEP(vertex_sampling);
+    RUN_STEP(vertex_smooth);
 
-    return true;
+    std::cout << "Number of vertices: " << RD.skelver.rows() << std::endl;
+
+    auto te = std::chrono::high_resolution_clock::now();
+    auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
+    std::cout << "[ROSA] Time Elapsed: " << telaps << " ms" << std::endl;
+
+    return running;
 }
 
-void Rosa::preprocess() {
-    auto pp_ts = std::chrono::high_resolution_clock::now();
-    CD.pts_->clear();
-    CD.nrms_->clear();
-    RR.vertices->clear();
+bool Rosa::preprocess() {
+    RD.pts_->clear();
+    RD.nrms_->clear();
+    RD.surf_nbs.clear();
+    RD.simi_nbs.clear();
 
-    if (CD.orig_->points.empty()) {
-        return;
+    if (RD.orig_->points.empty()) {
+        return false;
     }
 
     /* Distance Filtering */
     const float r2 = cfg_.pts_dist_lim * cfg_.pts_dist_lim;
     tmp_pt_->clear();
-    tmp_pt_->points.resize(CD.orig_->points.size());
+    tmp_pt_->points.resize(RD.orig_->points.size());
     size_t n = 0;
 
-    const auto& src = CD.orig_->points;
+    const auto& src = RD.orig_->points;
     auto& dst = tmp_pt_->points;
 
-    for (size_t i=0; i<src.size(); ++i) {
+    for (size_t i = 0; i < src.size(); ++i) {
         const auto& p = src[i];
-        const float d2 = p.x*p.x + p.y*p.y + p.z*p.z;
+        const float d2 = p.x * p.x + p.y * p.y + p.z * p.z;
         if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) && d2 <= r2) {
             dst[n++] = p;
         }
     }
     dst.resize(n);
-    CD.orig_->swap(*tmp_pt_);
-    CD.orig_->width = CD.orig_->points.size();
-    CD.orig_->height = 1;
-    CD.orig_->is_dense = true;
-    CD.pcd_size_ = CD.orig_->points.size();
+    RD.orig_->swap(*tmp_pt_);
+    RD.orig_->width  = static_cast<uint32_t>(RD.orig_->points.size());
+    RD.orig_->height = 1;
+    RD.orig_->is_dense = true;
+    RD.pcd_size_ = RD.orig_->points.size();
 
     /* Normal Estimation */
-    int pts_lim = static_cast<int>(std::floor(cfg_.max_points*0.8));
-    if (CD.pcd_size_ < pts_lim) {
+    if (static_cast<int>(RD.pcd_size_) < cfg_.min_points) {
         tmp_pt_->clear();
         tmp_nrm_->clear();
-        return;
+        return false;
     }
 
-    ne_.setInputCloud(CD.orig_);
+    ne_.setInputCloud(RD.orig_);
     ne_.setViewPoint(0.0, 0.0, 0.0);
     ne_.setSearchMethod(kd_tree_);
     ne_.setKSearch(cfg_.ne_knn);
@@ -87,102 +101,109 @@ void Rosa::preprocess() {
 
     /* Downsampling */
     tmp_pn_->clear();
-    tmp_pn_->points.resize(tmp_pt_->points.size());
-    for (size_t i=0; i<tmp_pn_->points.size(); ++i) {
+    tmp_pn_->points.resize(RD.orig_->points.size());
+    for (size_t i = 0; i < tmp_pn_->points.size(); ++i) {
         auto& q = tmp_pn_->points[i];
-        const auto& p = tmp_pt_->points[i];
+        const auto& p = RD.orig_->points[i];
         const auto& n = tmp_nrm_->points[i];
-        q.x = p.x;
-        q.y = p.y;
-        q.z = p.z;
+        q.x = p.x;  q.y = p.y;  q.z = p.z;
         q.normal_x = n.normal_x;
         q.normal_y = n.normal_y;
         q.normal_z = n.normal_z;
     }
-    tmp_pn_->width = tmp_pn_->points.size();
+    tmp_pn_->width  = static_cast<uint32_t>(tmp_pn_->points.size());
     tmp_pn_->height = 1;
     
-    float leaf = estimate_leaf_from_bbox(*tmp_pt_, cfg_.max_points);
-    for (int i=0; i<2; i++) {
+    float leaf = estimate_leaf_from_bbox(*RD.orig_, cfg_.max_points);
+
+    const int   max_iters = 8;
+    const float tol       = 0.05f;
+    const float leaf_min  = 1e-4f;
+    const float leaf_max  = 1e4f;
+    size_t N = 0;
+    for (int iter = 0; iter < max_iters; ++iter) {
         vgf_.setInputCloud(tmp_pn_);
         vgf_.setLeafSize(leaf, leaf, leaf);
         vgf_.filter(*tmp_pn_ds_);
-                
-        const size_t N = tmp_pn_ds_->points.size();
+        
+        N = tmp_pn_ds_->points.size();
         if (N == 0) {
-            // Too aggressive?
-            leaf *= 0.5;
-            continue; // go to loop-start with before swap
+            leaf *= 0.5f;
+            if (leaf < leaf_min) { leaf = leaf_min; break; }
+            continue;
         }
-    
-        float ratio = static_cast<float>(tmp_pn_->points.size()) / static_cast<float>(cfg_.max_points);
-        if (ratio > 1.05) {
-            leaf *= std::cbrt(ratio);
-            tmp_pn_->swap(*tmp_pn_ds_);
-        }
-        else {
+
+        const float ratio_out = static_cast<float>(N) / static_cast<float>(cfg_.max_points);
+        if (std::fabs(ratio_out - 1.0f) <= tol) {
             break;
         }
+
+        leaf *= std::cbrt(ratio_out);
+        if (!std::isfinite(leaf)) leaf = 0.05f;
+        if (leaf < leaf_min)  leaf = leaf_min;
+        if (leaf > leaf_max)  leaf = leaf_max;
     }
 
     leaf_size = leaf;
 
     const size_t M = tmp_pn_ds_->points.size();
-    CD.pts_->clear();
-    CD.pts_->resize(M);
-    CD.nrms_->clear();
-    CD.nrms_->resize(M);
+    RD.pts_->clear();
+    RD.pts_->resize(M);
+    RD.nrms_->clear();
+    RD.nrms_->resize(M);
 
-    for (size_t i=0; i<tmp_pn_ds_->points.size(); ++i) {
+    for (size_t i = 0; i < tmp_pn_ds_->points.size(); ++i) {
         const auto& q = tmp_pn_ds_->points[i];
-        CD.pts_->points[i] = pcl::PointXYZ(q.x, q.y, q.z);
+        RD.pts_->points[i] = pcl::PointXYZ(q.x, q.y, q.z);
         Eigen::Vector3f nn(q.normal_x, q.normal_y, q.normal_z);
         float L = nn.norm();
-        if (L>1e-6) nn /= L; else nn = Eigen::Vector3f::Zero();
-        CD.nrms_->points[i].normal_x = nn.x();
-        CD.nrms_->points[i].normal_y = nn.y();
-        CD.nrms_->points[i].normal_z = nn.z();
+        if (L > 1e-6f) nn /= L; else nn = Eigen::Vector3f::Zero();
+        RD.nrms_->points[i].normal_x = nn.x();
+        RD.nrms_->points[i].normal_y = nn.y();
+        RD.nrms_->points[i].normal_z = nn.z();
     }
     
-    CD.pts_->width = CD.nrms_->width = tmp_pn_ds_->points.size();
-    CD.pts_->height = CD.nrms_->height = 1;
-    CD.pts_->is_dense = true;
-    CD.nrms_->is_dense = true;
+    RD.pts_->width  = static_cast<uint32_t>(tmp_pn_ds_->points.size());
+    RD.pts_->height = 1;
+    RD.pts_->is_dense = true;
+    RD.nrms_->width  = static_cast<uint32_t>(tmp_pn_ds_->points.size());
+    RD.nrms_->height = 1;
+    RD.nrms_->is_dense = true;
     
     tmp_pt_->clear();
     tmp_nrm_->clear();
     tmp_pn_->clear();
     tmp_pn_ds_->clear();
 
-    CD.pcd_size_ = CD.pts_->points.size();
-
-    auto pp_te = std::chrono::high_resolution_clock::now();
-    auto pp_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(pp_te-pp_ts).count();
-    std::cout << "[ROSA] Preprocess Time: " << pp_elapsed << std::endl;
+    RD.pcd_size_ = RD.pts_->points.size();
+    return true;
 }
 
-void Rosa::rosa_init() {
+bool Rosa::rosa_init() {
     Eigen::Vector3f nv;
     Eigen::Matrix3f M;
-    pset.resize(CD.pcd_size_, 3);
-    vset.resize(CD.pcd_size_, 3);
-    vvar.resize(CD.pcd_size_, 1);
-    for (int i=0; i<CD.pcd_size_; ++i) {
-        const auto m = CD.pts_->points[i].getVector3fMap();
+    pset.resize(RD.pcd_size_, 3);
+    vset.resize(RD.pcd_size_, 3);
+    vvar.resize(RD.pcd_size_, 1);
+    for (size_t i=0; i<RD.pcd_size_; ++i) {
+        const auto m = RD.pts_->points[i].getVector3fMap();
         pset.row(i) = m.transpose();
-        nv(0) = CD.nrms_->points[i].normal_x;
-        nv(1) = CD.nrms_->points[i].normal_y;
-        nv(2) = CD.nrms_->points[i].normal_z;
+        nv(0) = RD.nrms_->points[i].normal_x;
+        nv(1) = RD.nrms_->points[i].normal_y;
+        nv(2) = RD.nrms_->points[i].normal_z;
         M = create_orthonormal_frame(nv);
         vset.row(i) = M.col(0);
     }
+    return 1;
 }
 
-void Rosa::similarity_neighbor_extraction() {
-    CD.simi_nbs.clear();
-    CD.simi_nbs.resize(CD.pcd_size_);
+bool Rosa::similarity_neighbor_extraction() {
+    RD.simi_nbs.clear();
+    RD.simi_nbs.resize(RD.pcd_size_);
 
-    kd_tree_->setInputCloud(CD.pts_);
+    if (RD.pts_->empty()) return 0;
+
+    kd_tree_->setInputCloud(RD.pts_);
     std::vector<int> nb_indxs;
     std::vector<float> nb_dists;
     nb_indxs.reserve(32);
@@ -190,15 +211,15 @@ void Rosa::similarity_neighbor_extraction() {
     const float radius_r = 10.0f * leaf_size;
     const float th_sim = 0.1f * leaf_size;
 
-    for (int i=0; i<CD.pcd_size_; ++i) {
+    for (size_t i=0; i<RD.pcd_size_; ++i) {
         nb_indxs.clear();
         nb_dists.clear();
 
-        const pcl::PointXYZ& P1 = CD.pts_->points[i];
-        const pcl::Normal& N1 = CD.nrms_->points[i];
+        const pcl::PointXYZ& P1 = RD.pts_->points[i];
+        const pcl::Normal& N1 = RD.nrms_->points[i];
 
         if (!std::isfinite(N1.normal_x) || !std::isfinite(N1.normal_y) || !std::isfinite(N1.normal_z)) {
-            CD.simi_nbs[i].clear();
+            RD.simi_nbs[i].clear();
             continue;
         }
 
@@ -212,9 +233,9 @@ void Rosa::similarity_neighbor_extraction() {
         temp_neighs.reserve(nb_indxs.size());
 
         for (int idx : nb_indxs) {
-            if (idx == i) continue;
-            const pcl::PointXYZ& P2 = CD.pts_->points[idx];
-            const pcl::Normal& N2 = CD.nrms_->points[idx];
+            if (idx == (int)i) continue;
+            const pcl::PointXYZ& P2 = RD.pts_->points[idx];
+            const pcl::Normal& N2 = RD.nrms_->points[idx];
             
             if (!std::isfinite(N2.normal_x) || !std::isfinite(N2.normal_y) || !std::isfinite(N2.normal_z)) {
                 continue;
@@ -228,28 +249,29 @@ void Rosa::similarity_neighbor_extraction() {
                 temp_neighs.push_back(idx);
             }
         }
-        CD.simi_nbs[i].swap(temp_neighs);
+        RD.simi_nbs[i].swap(temp_neighs);
     }
+    return 1;
 }
 
-void Rosa::drosa() {
-    CD.surf_nbs.clear();
-    CD.surf_nbs.resize(CD.pcd_size_);
+bool Rosa::drosa() {
+    RD.surf_nbs.clear();
+    RD.surf_nbs.resize(RD.pcd_size_);
     std::vector<int> knn_idxs(cfg_.nb_knn);
     std::vector<float> knn_dists(cfg_.nb_knn);
-    kd_tree_->setInputCloud(CD.pts_);
-    for (int i=0; i<CD.pcd_size_; ++i) {
+    kd_tree_->setInputCloud(RD.pts_);
+    for (size_t i=0; i<RD.pcd_size_; ++i) {
         kd_tree_->nearestKSearch(i, cfg_.nb_knn, knn_idxs, knn_dists);
-        CD.surf_nbs[i] = knn_idxs;
+        RD.surf_nbs[i] = knn_idxs;
     }   
 
     /* ROSA POINT ORIENTATION*/
     Eigen::Vector3f p, n, new_v;
     std::vector<int> active;
-    Eigen::MatrixXf vnew = Eigen::MatrixXf::Zero(CD.pcd_size_, 3);
+    Eigen::MatrixXf vnew = Eigen::MatrixXf::Zero(RD.pcd_size_, 3);
     
     for (int it=0; it<cfg_.niter_drosa; ++it) {
-        for (int pidx=0; pidx<CD.pcd_size_; ++pidx) {
+        for (size_t pidx=0; pidx<RD.pcd_size_; ++pidx) {
             p = pset.row(pidx);
             n = vset.row(pidx);
             active = compute_active_samples(pidx, p, n);
@@ -269,8 +291,8 @@ void Rosa::drosa() {
         vvar = (vvar.array().square().square() + eps).inverse().matrix();
         
         // Smoothing...
-        for (int p=0; p<CD.pcd_size_; ++p) {
-            const auto& snb = CD.surf_nbs[p];
+        for (size_t p=0; p<RD.pcd_size_; ++p) {
+            const auto& snb = RD.surf_nbs[p];
             if (snb.empty()) continue;
             
             Eigen::Matrix3f M = Eigen::Matrix3f::Zero();
@@ -288,10 +310,10 @@ void Rosa::drosa() {
     /* ROSA POINT POSITION */
     float PLANAR_TH = 0.1;
     std::vector<Eigen::Vector3f> goodCenters;
-    tmp_pt_->resize(CD.pcd_size_);
+    tmp_pt_->resize(RD.pcd_size_);
     std::vector<int> poorIdx;
 
-    for (int pidx=0; pidx<CD.pcd_size_; ++pidx) {
+    for (size_t pidx=0; pidx<RD.pcd_size_; ++pidx) {
         p = pset.row(pidx);
         n = vset.row(pidx);
 
@@ -312,8 +334,8 @@ void Rosa::drosa() {
             Eigen::Vector3f mean_p = Eigen::Vector3f::Zero();
             Eigen::Vector3f mean_n = Eigen::Vector3f::Zero();
             for (int i : active) {
-                mean_p += CD.pts_->points[i].getVector3fMap();
-                const auto v = CD.nrms_->points[i].getNormalVector3fMap();
+                mean_p += RD.pts_->points[i].getVector3fMap();
+                const auto v = RD.nrms_->points[i].getNormalVector3fMap();
                 const float s2 = v.squaredNorm();
                 const float inv_len = (s2 > 1e-20f) ? (1.0f / std::sqrt(s2)) : 0.0f;
                 const Eigen::Vector3f vn = v * inv_len;
@@ -332,7 +354,7 @@ void Rosa::drosa() {
         const bool in_range = (center_f - p).norm() < cfg_.max_proj_range;
         if (finite && in_range) {
             pset.row(pidx) = center_f;
-            const pcl::PointXYZ& qp = CD.pts_->points[pidx];
+            const pcl::PointXYZ& qp = RD.pts_->points[pidx];
             tmp_pt_->points[pidx] = qp;
             goodCenters.push_back(center_f);
         }
@@ -345,7 +367,7 @@ void Rosa::drosa() {
     std::vector<int> pair_id(1);
     std::vector<float> pair_dist(1);
     for (int poor_id : poorIdx) {
-        const pcl::PointXYZ& q = CD.pts_->points[poor_id];
+        const pcl::PointXYZ& q = RD.pts_->points[poor_id];
         if (kd_tree_->nearestKSearch(q, 1, pair_id, pair_dist) > 0) {
             const int gid = pair_id[0];
             pset.row(poor_id) = goodCenters[gid].transpose();
@@ -353,16 +375,17 @@ void Rosa::drosa() {
     }
 
     tmp_pt_->clear();
+    return 1;
 }
 
-void Rosa::dcrosa() {
+bool Rosa::dcrosa() {
     constexpr float CONF_TH = 0.5;
     constexpr int MIN_NB = 3;
-    Eigen::MatrixXf newpset(CD.pcd_size_, 3);
+    Eigen::MatrixXf newpset(RD.pcd_size_, 3);
 
     for (int it=0; it<cfg_.niter_dcrosa; ++it) {
-        for (int i=0; i<CD.pcd_size_; ++i) {
-            const auto& nb = CD.simi_nbs[i];
+        for (size_t i=0; i<RD.pcd_size_; ++i) {
+            const auto& nb = RD.simi_nbs[i];
             if (nb.empty()) {
                 newpset.row(i) = pset.row(i);
                 continue;
@@ -375,15 +398,15 @@ void Rosa::dcrosa() {
         }
         pset.swap(newpset);
     
-        for (int i=0; i<CD.pcd_size_; ++i) {
-            const auto& nb = CD.simi_nbs[i];
+        for (size_t i=0; i<RD.pcd_size_; ++i) {
+            const auto& nb = RD.simi_nbs[i];
             newpset.row(i) = pset.row(i);
     
             if (static_cast<int>(nb.size()) < MIN_NB) continue;
     
             Eigen::Vector3f mean, dir;
             float conf;
-            if (local_line_fit(CD.simi_nbs[i], mean, dir, conf, MIN_NB) && conf > CONF_TH) {
+            if (local_line_fit(RD.simi_nbs[i], mean, dir, conf, MIN_NB) && conf > CONF_TH) {
                 const Eigen::Vector3f x = pset.row(i).transpose();
                 const float t = dir.dot(x - mean);
                 newpset.row(i) = (mean + t * dir).transpose();
@@ -394,43 +417,50 @@ void Rosa::dcrosa() {
         }
         pset.swap(newpset);
     }
+    return 1;
 }
 
-void Rosa::vertex_sampling() {
+bool Rosa::vertex_sampling() {
     if (!pset_cloud) {
         pset_cloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
     }
 
-    if (pset_cloud->points.size() != static_cast<size_t>(CD.pcd_size_)) {
-        pset_cloud->points.resize(CD.pcd_size_);
-        pset_cloud->width = CD.pcd_size_;
-        pset_cloud->height = 1;
-        pset_cloud->is_dense = true;
+    if (RD.pcd_size_ == 0) {
+        RD.skelver.resize(0,3);
+        return 0;
     }
 
-    for (int i=0; i<CD.pcd_size_; ++i) {
-        pset_cloud->points[i].x = pset(i,0);
-        pset_cloud->points[i].y = pset(i,1);
-        pset_cloud->points[i].z = pset(i,2);
+    pset_cloud->points.clear();
+    pset_cloud->width = 0;
+    pset_cloud->height = 1;
+    pset_cloud->is_dense = true;
+
+    for (size_t i=0; i<RD.pcd_size_; ++i) {
+        const float x = pset(i,0);
+        const float y = pset(i,1);
+        const float z = pset(i,2);
+        const bool finite = std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+        if (!finite) continue;
+        pset_cloud->points.emplace_back(x,y,z);
     }
+    pset_cloud->width = pset_cloud->points.size();
+    RD.pcd_size_ = pset_cloud->points.size();
 
     const float R = static_cast<float>(leaf_size);
-    const float R2 = R * R;
+    std::vector<char> covered(RD.pcd_size_, 0);
+    std::vector<int> corresp(RD.pcd_size_, -1);
+    std::vector<float> mind2(RD.pcd_size_, std::numeric_limits<float>::infinity());
 
-    std::vector<char> covered(CD.pcd_size_, 0);
-    std::vector<int> corresp(CD.pcd_size_, -1);
-    std::vector<float> mind2(CD.pcd_size_, std::numeric_limits<float>::infinity());
-
-    CD.skelver.resize(0,3);
+    RD.skelver.resize(0,3);
     kd_tree_->setInputCloud(pset_cloud);
     
     std::vector<int> indxs;
     std::vector<float> d2s;
-    int num_covered = CD.pcd_size_;
+    int num_covered = RD.pcd_size_;
 
-    for (int start=0; start<CD.pcd_size_ && num_covered>0; ) {
+    for (size_t start=0; start<RD.pcd_size_ && num_covered>0; ) {
         int seed = -1;
-        for (int i=0; i<CD.pcd_size_; ++i) {
+        for (size_t i=0; i<RD.pcd_size_; ++i) {
             if (!covered[i]) {
                 seed = i;
                 start = i+1;
@@ -439,9 +469,9 @@ void Rosa::vertex_sampling() {
         }
         if (seed == -1) break; // all covered
 
-        const int vid = static_cast<int>(CD.skelver.rows());
-        CD.skelver.conservativeResize(vid + 1, 3);
-        CD.skelver.row(vid) = pset.row(seed);
+        const int vid = static_cast<int>(RD.skelver.rows());
+        RD.skelver.conservativeResize(vid + 1, 3);
+        RD.skelver.row(vid) = pset.row(seed);
 
         indxs.clear();
         d2s.clear();
@@ -470,48 +500,57 @@ void Rosa::vertex_sampling() {
         }
     }
     
-    // EXPORT CORRESP IF NEEDED DOWNSTREAM... (CD.corresp or something...)
+    // EXPORT CORRESP IF NEEDED DOWNSTREAM... (RD.corresp or something...)
 
     /* Recentering */
 
     // Inverse correspondence map
-    std::vector<std::vector<int>> vertex_to_pts(CD.skelver.rows());
-    for (int i=0; i<CD.pcd_size_; ++i) {
+    std::vector<std::vector<int>> vertex_to_pts(RD.skelver.rows());
+    for (size_t i=0; i<RD.pcd_size_; ++i) {
         int vid = corresp[i];
         if (vid >= 0) {
             vertex_to_pts[vid].push_back(i);
         }
     }
 
-    for (int i=0; i<CD.skelver.rows(); ++i) {
+    for (int i=0; i<RD.skelver.rows(); ++i) {
         auto &idxs = vertex_to_pts[i];
         if (idxs.empty()) continue;
 
         Eigen::Vector3f sum = Eigen::Vector3f::Zero();
         for (int idx : idxs) {
-            const auto& p = CD.pts_->points[idx];
+            const auto& p = RD.pts_->points[idx];
             sum += p.getVector3fMap();
         }
 
         Eigen::Vector3f eucl_center = sum / static_cast<float>(idxs.size());
-        Eigen::Vector3f current = CD.skelver.row(i);
-        CD.skelver.row(i) = (cfg_.alpha_recenter * current + (1.0 - cfg_.alpha_recenter) * eucl_center).transpose();
+        Eigen::Vector3f current = RD.skelver.row(i);
+        RD.skelver.row(i) = (cfg_.alpha_recenter * current + (1.0 - cfg_.alpha_recenter) * eucl_center).transpose();
     }
+    return 1;
 }
 
-void Rosa::vertex_smooth() {
-    const int V = static_cast<int>(CD.skelver.rows());
-    tmp_pt_->resize(V);
-    tmp_pt_->clear();
+bool Rosa::vertex_smooth() {
+    int V = static_cast<int>(RD.skelver.rows());
+    if (V == 0) return 0;
+
+    tmp_pt_->points.clear();
+    tmp_pt_->width = 0;
+    tmp_pt_->height = 1;
+    tmp_pt_->is_dense = true;
     
     for (int i=0; i<V; ++i) {
-        tmp_pt_->points[i].x = CD.skelver(i,0);
-        tmp_pt_->points[i].y = CD.skelver(i,1);
-        tmp_pt_->points[i].z = CD.skelver(i,2);
+        const float x = RD.skelver(i,0);
+        const float y = RD.skelver(i,1);
+        const float z = RD.skelver(i,2);
+        const bool finite = std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+        if (!finite) continue;
+        tmp_pt_->points.emplace_back(x,y,z);
     }
 
+    V = static_cast<int>(tmp_pt_->points.size());
     kd_tree_->setInputCloud(tmp_pt_);
-
+    
     std::vector<std::vector<int>> neighbors(V);
     {
         std::vector<int> idx;
@@ -535,8 +574,8 @@ void Rosa::vertex_smooth() {
         }
     }
 
-    Eigen::MatrixXf cur = CD.skelver;
-    Eigen::MatrixXf next = CD.skelver;
+    Eigen::MatrixXf cur = RD.skelver;
+    Eigen::MatrixXf next = RD.skelver;
 
     for (int it=0; it<cfg_.niter_smooth; ++it) {
         for (int i=0; i<V; ++i) {
@@ -575,13 +614,14 @@ void Rosa::vertex_smooth() {
 
         cur.swap(next);
     }
-    CD.skelver = cur;
+    RD.skelver = cur;
+    return 1;
 }
 
 
 /* HELPER FUNCTIONS */
 
-float Rosa::similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& v1, const Eigen::Vector3f& p2, const Eigen::Vector3f& v2, float range_r, float scale=5.0f) {
+float Rosa::similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& v1, const Eigen::Vector3f& p2, const Eigen::Vector3f& v2, const float range_r, const float scale) {
     const Eigen::Vector3f d = p1 - p2;
     const float dot12_raw = v1.dot(v2);
     const float dot12 = std::max(0.0f, std::min(1.0f, dot12_raw));
@@ -610,12 +650,12 @@ float Rosa::similarity_metric(const Eigen::Vector3f& p1, const Eigen::Vector3f& 
 }
 
 std::vector<int> Rosa::compute_active_samples(const int seed, const Eigen::Vector3f& p, const Eigen::Vector3f& n) {
-    std::vector<char> state(CD.pcd_size_, 0); // 0=unknown, 1=queued, 2=visited
+    std::vector<char> state(RD.pcd_size_, 0); // 0=unknown, 1=queued, 2=visited
     std::vector<int> out;
     std::vector<int> stack;
 
     auto in_slab = [&](int i)->bool {
-        const auto& q = CD.pts_->points[i];
+        const auto& q = RD.pts_->points[i];
         float d = n[0]*(p[0]-q.x) + n[1]*(p[1]-q.y) + n[2]*(p[2]-q.z);
         return std::abs(d) < leaf_size;
     };
@@ -631,7 +671,7 @@ std::vector<int> Rosa::compute_active_samples(const int seed, const Eigen::Vecto
         state[cur] = 2;
         out.push_back(cur);
 
-        for (int nb : CD.simi_nbs[cur]) {
+        for (int nb : RD.simi_nbs[cur]) {
             if (state[nb] == 0 && in_slab(nb)) {
                 state[nb] = 1;
                 stack.push_back(nb);
@@ -649,7 +689,7 @@ Eigen::Vector3f Rosa::compute_symmetrynormal(const std::vector<int>& idxs) {
     Eigen::Matrix3f sum_outer = Eigen::Matrix3f::Zero();
 
     for (int idx : idxs) {
-        const auto v = CD.nrms_->points[idx].getNormalVector3fMap();
+        const auto v = RD.nrms_->points[idx].getNormalVector3fMap();
         float s2 = v.squaredNorm();
         const float inv_len = (s2 > 1e-20) ? 1.0f / std::sqrt(s2) : 0.0f;
         const Eigen::Vector3f vn = inv_len * v;
@@ -672,7 +712,7 @@ float Rosa::symmnormal_variance(Eigen::Vector3f& symm_nrm, std::vector<int>& idx
     float sum_a2 = 0.0f;
 
     for (int idx : idxs) {
-        const auto v = CD.nrms_->points[idx].getNormalVector3fMap();
+        const auto v = RD.nrms_->points[idx].getNormalVector3fMap();
         const float s2 = v.squaredNorm();
         const float inv_len = (s2 > 1e-20f) ? 1.0f / std::sqrt(s2) : 0.0f;
         
@@ -695,7 +735,7 @@ Eigen::Vector3f Rosa::cov_eigs_from_normals(const std::vector<int>& idxs) {
     Eigen::Matrix3f sum_outer = Eigen::Matrix3f::Zero();
 
     for (int i : idxs) {
-        const auto v = CD.nrms_->points[i].getNormalVector3fMap();
+        const auto v = RD.nrms_->points[i].getNormalVector3fMap();
         const float s2 = v.squaredNorm();
         const float inv_len = (s2 > 1e-20) ? 1.0f / std::sqrt(s2) : 0.0f;
         const Eigen::Vector3f vn = v * inv_len;
@@ -718,8 +758,8 @@ Eigen::Vector3f Rosa::closest_projection_point(const std::vector<int>& idxs) {
     Eigen::Vector3f B = Eigen::Vector3f::Zero();
 
     for (int i : idxs) {
-        const auto p = CD.pts_->points[i].getVector3fMap();
-        const auto v = CD.nrms_->points[i].getNormalVector3fMap();
+        const auto p = RD.pts_->points[i].getVector3fMap();
+        const auto v = RD.nrms_->points[i].getNormalVector3fMap();
         const float s2 = v.squaredNorm();
         const float inv_len = (s2 > 1e-20f) ? (1.0 / std::sqrt(s2)) : 0.0f;
         const Eigen::Vector3f vn = v * inv_len;

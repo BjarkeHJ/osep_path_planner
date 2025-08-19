@@ -6,7 +6,7 @@ find_package(osep_data_publisher REQUIRED)
 find_package(osep_skeleton_decomp REQUIRED)
 find_package(osep_viewpoint_manager REQUIRED)
 find_package(osep_planning REQUIRED)
-find_package(osep_rosa REQUIRED)
+find_package(osep_skeleton_decomp REQUIRED)
 find_package(osep_2d_map REQUIRED)
 
 install(DIRECTORY launch

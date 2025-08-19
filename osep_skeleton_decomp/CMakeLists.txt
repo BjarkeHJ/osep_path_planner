@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Define executable
-set(EXEC_NAME osep_skeleton_decomp)
+set(EXEC_NAME osep_rosa)
 
 # ROS2 dependencies
 find_package(ament_cmake REQUIRED)
@@ -36,8 +36,7 @@ find_package(PCL 1.12 REQUIRED)
 
 add_executable(${EXEC_NAME}
                 src/rosa_node.cpp
-                src/rosa_main.cpp
-                src/extract_tools.cpp)
+                src/rosa.cpp)
 
 target_include_directories(${EXEC_NAME} PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

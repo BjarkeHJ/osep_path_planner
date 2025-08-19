@@ -1,180 +1,153 @@
 /* 
 
-ROtational Symmetry Axis (ROSA) Skeletonization ROS2 Node
-
-TODO:
-- Constructor instead of init() function for setting up pubs/subs
-
+ROS 2 Node: ROSA Point Computation
 
 */
 
-
-#include "rosa_main.hpp"
-
-#include <chrono>
+#include "rosa.hpp"
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 
-class SkeletonExtractionNode : public rclcpp::Node {
+
+class RosaNode : public rclcpp::Node {
 public:
-    SkeletonExtractionNode() : Node("skeleton_extraction_node") {
-        RCLCPP_INFO(this->get_logger(), "Skeleton Extraction Node Constructed");
-    }
-
-    void init();
-    void pcd_callback(const sensor_msgs::msg::PointCloud2::SharedPtr pcd_msg);
-    void set_transform();
-    void run();
-    void publish_vertices();
-
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr vertex_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
-    rclcpp::TimerBase::SharedPtr run_timer_;
-    rclcpp::TimerBase::SharedPtr vertex_pub_timer_;
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-
+    RosaNode();
+    
 private:
-    std::string topic_prefix = "/osep";
+    /* Functions */
+    void pcd_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr pcd_msg);
+    void process_tick();
+    void publish_vertices(Eigen::MatrixXf& skelver, const std_msgs::msg::Header& src_header);
+    
+    /* ROS2 Sub/Pub/Timer */
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_pub_;
+    rclcpp::TimerBase::SharedPtr tick_timer_;
+    // SOME ODOMETRY SUBSCRIPTION
+
+    /* Params */
+    std::string topic_prefix_;
+    int tick_ms_; 
 
     /* Utils */
-    std::shared_ptr<SkelEx> skel_ex;
-
-    /* Params */
-    bool run_flag = false;
-    int run_timer_ms = 50;
-    int vertex_pub_timer_ms = 50;
+    std::mutex latest_mutex_;
+    std::unique_ptr<Rosa> rosa_;
 
     /* Data */
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pcd_;
-    geometry_msgs::msg::TransformStamped curr_tf;
-
-    // std::string global_frame_id = "World";
-    std::string global_frame_id = "odom";
-    // std::string local_frame_id = "lidar_frame";
-    std::string local_frame_id = "lidar";
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr latest_msg_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr skelver_cloud;
+    RosaConfig rosa_cfg;
 };
 
+RosaNode::RosaNode() : Node("RosaNode") {
+    /* LAUNCH FILE PARAMETER DECLARATIONS */
+    // MISC
+    topic_prefix_ = declare_parameter<std::string>("topic_prefix", "/osep");
+    tick_ms_ = declare_parameter<int>("tick_ms", 200);
+    // ROSA
+    rosa_cfg.max_points = declare_parameter<int>("rosa_max_points", 1000);
+    rosa_cfg.min_points = declare_parameter<int>("rosa_min_points", 300);
+    rosa_cfg.pts_dist_lim = declare_parameter<float>("rosa_point_dist_lim", 75.0f);
+    rosa_cfg.ne_knn = declare_parameter<int>("rosa_ne_knn", 20);
+    rosa_cfg.nb_knn = declare_parameter<int>("rosa_nb_knn", 10);
+    rosa_cfg.max_proj_range = declare_parameter<float>("rosa_max_projection_range", 10.0f);
+    rosa_cfg.niter_drosa = declare_parameter<int>("rosa_niter_drosa", 6);
+    rosa_cfg.niter_dcrosa = declare_parameter<int>("rosa_niter_dcrosa", 5);
+    rosa_cfg.niter_smooth = declare_parameter<int>("rosa_niter_smooth", 3);
+    rosa_cfg.alpha_recenter = declare_parameter<float>("rosa_recenter_alpha", 0.3f);
+    rosa_cfg.radius_smooth = declare_parameter<float>("rosa_smooth_radius", 5.0f);
 
-void SkeletonExtractionNode::init() {
-    RCLCPP_INFO(this->get_logger(), "Initializing Modules and Data Structures...");
+    /* OBJECT INITIALIZATION */
+    rosa_ = std::make_unique<Rosa>(rosa_cfg);
+
+    /* ROS2 */
+    auto sub_qos = rclcpp::SensorDataQoS(); 
+    sub_qos.keep_last(1);
+    pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>("/isaac/lidar/raw/pointcloud", 
+                                                                        sub_qos,
+                                                                        std::bind(&RosaNode::pcd_callback,
+                                                                        this,
+                                                                        std::placeholders::_1));
     
-    /* Subscriber, Publishers, Timers, etc... */
-    pcd_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(topic_prefix+"/lidar_scan", 10, std::bind(&SkeletonExtractionNode::pcd_callback, this, std::placeholders::_1));
-    vertex_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(topic_prefix+"/local_vertices", 10);
-    cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(topic_prefix+"/local_points", 10);
+    auto pub_qos = rclcpp::QoS(rclcpp::KeepLast(10));
+    pcd_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/test_pointcloud", pub_qos);
+                                                                        
+    tick_timer_ = create_wall_timer(std::chrono::milliseconds(tick_ms_),
+                                    std::bind(&RosaNode::process_tick, this));
+
+    /* Initialize Datastructures */
+    skelver_cloud.reset(new pcl::PointCloud<pcl::PointXYZ>); 
+
+    RCLCPP_INFO(this->get_logger(), "RosaNode Initialized");
+}
+
+void RosaNode::pcd_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr pcd_msg) {
+    std::scoped_lock lk(latest_mutex_);
+    latest_msg_ = std::move(pcd_msg);
+}
+
+void RosaNode::publish_vertices(Eigen::MatrixXf& skelver, const std_msgs::msg::Header& src_header) {
+    if (skelver.rows() == 0) return;
+    skelver_cloud->clear();
+    skelver_cloud->points.resize(skelver.rows());
+    skelver_cloud->width = skelver.rows();
+    skelver_cloud->height = 1;
+    skelver_cloud->is_dense = true;
+
+    for (int i=0; i<skelver.rows(); ++i) {
+        auto& p = skelver_cloud->points[i];
+        p.x = skelver(i,0);        
+        p.y = skelver(i,1);        
+        p.z = skelver(i,2);        
+    }
+
+    sensor_msgs::msg::PointCloud2 skelver_msg;
+    pcl::toROSMsg(*skelver_cloud, skelver_msg);
     
-    run_timer_ = this->create_wall_timer(std::chrono::milliseconds(run_timer_ms), std::bind(&SkeletonExtractionNode::run, this));
-    vertex_pub_timer_ = this->create_wall_timer(std::chrono::milliseconds(vertex_pub_timer_ms), std::bind(&SkeletonExtractionNode::publish_vertices, this));
-
-    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
-    /* Params */
-    // Stuff from launch file (ToDo)...
-
-    /* Data */
-    pcd_.reset(new pcl::PointCloud<pcl::PointXYZ>);
-
-
-    /* Modules */
-    skel_ex = std::make_shared<SkelEx>(shared_from_this());
-    skel_ex->init();
+    skelver_msg.header = src_header; // set original frame_id and stamp...
+    if (skelver_msg.header.frame_id.empty()) skelver_msg.header.frame_id = "lidar";
+    if (skelver_msg.header.stamp.sec == 0 && skelver_msg.header.stamp.nanosec == 0) {
+        skelver_msg.header.stamp = this->get_clock()->now();
+    }
+    
+    pcd_pub_->publish(skelver_msg);
 }
 
-void SkeletonExtractionNode::pcd_callback(const sensor_msgs::msg::PointCloud2::SharedPtr pcd_msg) {
-    if (run_flag) return; // Currently processing...
-
-    if (pcd_msg->data.empty()) {
-        RCLCPP_INFO(this->get_logger(), "Received empty point cloud...");
-        return;
+void RosaNode::process_tick() {
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr msg;
+    {
+        std::scoped_lock lk(latest_mutex_);
+        msg = latest_msg_;
+        latest_msg_.reset();
     }
-    pcl::fromROSMsg(*pcd_msg, *pcd_);
-    skel_ex->SS.pts_ = pcd_;
+    if (!msg) return;
 
-    try {
-        // curr_tf = tf_buffer_->lookupTransform("World", "lidar_frame", pcd_msg->header.stamp, rclcpp::Duration::from_seconds(0.1));
-        // curr_tf = tf_buffer_->lookupTransform("World", "lidar_frame", tf2::TimePointZero);
-        // curr_tf = tf_buffer_->lookupTransform(global_frame_id, local_frame_id, tf2::TimePointZero);
-        curr_tf = tf_buffer_->lookupTransform(global_frame_id, local_frame_id, pcd_msg->header.stamp);
-        set_transform();
-    }
-    catch (const tf2::TransformException &ex) {
-        RCLCPP_ERROR(this->get_logger(), "Transform Lookup Failed: %s", ex.what());
-        return;
+    pcl::fromROSMsg(*msg, rosa_->input_cloud());
+
+    std::cout << "stamp: "
+          << msg->header.stamp.sec << "."
+          << std::setw(9) << std::setfill('0') << msg->header.stamp.nanosec
+          << "  frame: " << msg->header.frame_id << std::endl;
+
+    if (rosa_->rosa_run()) {
+        Eigen::MatrixXf& local_vertices = rosa_->output_vertices();
+        publish_vertices(local_vertices, msg->header);
     }
 
-    run_flag = true;
+    // Lookup transform for "msg"
+
+    // Parse transform vector and quaternion (Eigen) to global skeleton module (gskel->increment(tf,vertices)) return global skeleton
+
+    // Publish global skeleton as coordinates (or pcd??)
 }
 
-void SkeletonExtractionNode::set_transform() {
-    Eigen::Quaterniond q(curr_tf.transform.rotation.w,
-        curr_tf.transform.rotation.x,
-        curr_tf.transform.rotation.y,
-        curr_tf.transform.rotation.z);
-    Eigen::Matrix3d R = q.toRotationMatrix();
-    Eigen::Vector3d t(curr_tf.transform.translation.x,
-        curr_tf.transform.translation.y,
-        curr_tf.transform.translation.z);
-    skel_ex->tf_rot = R;
-    skel_ex->tf_trans = t;
-}
 
-void SkeletonExtractionNode::run() {
-    if (run_flag) {
-        
-        run_flag = false;
-        skel_ex->main();
-
-        sensor_msgs::msg::PointCloud2 cloud_in;
-        sensor_msgs::msg::PointCloud2 cloud_out;
-        pcl::toROSMsg(*skel_ex->SS.pts_, cloud_in);
-
-        cloud_in.header.frame_id = local_frame_id;
-        cloud_in.header.stamp = curr_tf.header.stamp;
-        // cloud_in.header.stamp = this->now();
-
-        try {
-            // Transform the point cloud
-            tf2::doTransform(cloud_in, cloud_out, curr_tf);
-
-            // Pass through filter to filter points above gnd_threshold
-
-            // Now cloud_out is in the target_frame
-            cloud_out.header.frame_id = global_frame_id;
-            cloud_pub_->publish(cloud_out);
-        }
-        catch (tf2::TransformException &ex) {
-            RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
-        }
-    }
-}
-
-void SkeletonExtractionNode::publish_vertices() {
-    if (skel_ex->SS.vertices_ && !skel_ex->SS.vertices_->empty()) {
-        sensor_msgs::msg::PointCloud2 vertex_msg;
-        pcl::toROSMsg(*skel_ex->SS.vertices_, vertex_msg);
-        // vertex_msg.header.frame_id = local_frame_id;
-        vertex_msg.header.frame_id = global_frame_id;
-        vertex_msg.header.stamp = curr_tf.header.stamp;
-        // vertex_msg.header.stamp = this->now();
-        vertex_pub_->publish(vertex_msg);
-    }
-    else RCLCPP_INFO(this->get_logger(), "WARNING: Waiting for first vertex set...");
-}
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<SkeletonExtractionNode>();
-    node->init(); // Initialize Modules etc...
-
-    // Spin the node
+    auto node = std::make_shared<RosaNode>();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
