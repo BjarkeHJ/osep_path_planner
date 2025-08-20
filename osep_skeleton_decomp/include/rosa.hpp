@@ -109,17 +109,6 @@ inline float estimate_leaf_from_bbox(const pcl::PointCloud<pcl::PointXYZ>& cloud
     return leaf;
 }
 
-
-using CloudMapXYZ = Eigen::Map<
-    Eigen::Matrix<float, 3, Eigen::Dynamic>,
-    0,
-    Eigen::InnerStride<sizeof(pcl::PointXYZ)/sizeof(float)>
->;
-inline CloudMapXYZ mapCloud(pcl::PointCloud<pcl::PointXYZ>& cloud) {
-    float* base = cloud.empty() ? nullptr : &cloud.points[0].x;
-    return { base, 3, static_cast<int>(cloud.size()), Eigen::InnerStride<sizeof(pcl::PointXYZ)/sizeof(float)>() };
-}
-
 inline Eigen::Matrix3f create_orthonormal_frame(Eigen::Vector3f &v) {
     const float n = v.norm();
     if (n == 0.0) {

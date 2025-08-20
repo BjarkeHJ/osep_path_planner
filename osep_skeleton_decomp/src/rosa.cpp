@@ -6,6 +6,7 @@ Main algorithm for local ROSA Point computation
 Consider normalization of point cloud data prior to processing (for ease of parameter tuning)
 OBS: de-normalize before returning...
 
+TODO: REMOVE ANY VERTICES THAT ARE FAR AWAY FROM POINT CLOUD
 
 */
 

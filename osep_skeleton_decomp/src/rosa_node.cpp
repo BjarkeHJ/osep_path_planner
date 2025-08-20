@@ -91,18 +91,20 @@ void RosaNode::pcd_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr 
 void RosaNode::publish_vertices(Eigen::MatrixXf& skelver, const std_msgs::msg::Header& src_header) {
     if (skelver.rows() == 0) return;
     skelver_cloud->clear();
-    skelver_cloud->points.resize(skelver.rows());
-    skelver_cloud->width = skelver.rows();
-    skelver_cloud->height = 1;
-    skelver_cloud->is_dense = true;
-
+    skelver_cloud->points.reserve(skelver.rows());
+    
     for (int i=0; i<skelver.rows(); ++i) {
-        auto& p = skelver_cloud->points[i];
-        p.x = skelver(i,0);        
-        p.y = skelver(i,1);        
-        p.z = skelver(i,2);        
+        const float x = skelver(i,0);
+        const float y = skelver(i,1);
+        const float z = skelver(i,2);
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) continue;
+        skelver_cloud->points.emplace_back(x,y,z);        
     }
 
+    skelver_cloud->width = skelver_cloud->points.size();
+    skelver_cloud->height = 1;
+    skelver_cloud->is_dense = true;
+    
     sensor_msgs::msg::PointCloud2 skelver_msg;
     pcl::toROSMsg(*skelver_cloud, skelver_msg);
     
@@ -135,12 +137,6 @@ void RosaNode::process_tick() {
         Eigen::MatrixXf& local_vertices = rosa_->output_vertices();
         publish_vertices(local_vertices, msg->header);
     }
-
-    // Lookup transform for "msg"
-
-    // Parse transform vector and quaternion (Eigen) to global skeleton module (gskel->increment(tf,vertices)) return global skeleton
-
-    // Publish global skeleton as coordinates (or pcd??)
 }
 
 

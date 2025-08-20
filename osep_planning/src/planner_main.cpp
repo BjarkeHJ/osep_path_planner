@@ -135,7 +135,7 @@ void PathPlanner::skeleton_increment() {
 
                 VertexLKF kf(kf_pn, kf_mn);
                 kf.initialize(gver.position, gver.covariance);
-                kf.update(ver);
+                // kf.update(ver);
 
                 gver.position = kf.getState();
                 gver.covariance = kf.getCovariance();
@@ -175,19 +175,6 @@ void PathPlanner::skeleton_increment() {
             GS.prelim_vertices.push_back(new_ver);
         }
     }
-
-    // Delete points that did not pass the confidence check (reverse indexing for id consistency)
-    // for (auto it = ids_to_delete.rbegin(); it != ids_to_delete.rend(); ++it) {
-    //     GS.prelim_vertices.erase(GS.prelim_vertices.begin() + *it);
-    // }
-
-    // for (auto it = ids_to_delete.rbegin(); it != ids_to_delete.rend(); ++it) {
-    //     if (*it >= 0 && *it < (int)GS.prelim_vertices.size()) {
-    //         GS.prelim_vertices.erase(GS.prelim_vertices.begin() + *it);
-    //     } else {
-    //         RCLCPP_WARN(node_->get_logger(), "Skipping deletion of invalid index: %d", *it);
-    //     }
-    // }
 
     GS.prelim_vertices.erase(
         std::remove_if(
