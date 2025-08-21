@@ -48,7 +48,7 @@ RosaNode::RosaNode() : Node("RosaNode") {
     tick_ms_ = declare_parameter<int>("tick_ms", 200);
     // ROSA
     rosa_cfg.max_points = declare_parameter<int>("rosa_max_points", 1000);
-    rosa_cfg.min_points = declare_parameter<int>("rosa_min_points", 300);
+    rosa_cfg.min_points = declare_parameter<int>("rosa_min_points", 100);
     rosa_cfg.pts_dist_lim = declare_parameter<float>("rosa_point_dist_lim", 75.0f);
     rosa_cfg.ne_knn = declare_parameter<int>("rosa_ne_knn", 20);
     rosa_cfg.nb_knn = declare_parameter<int>("rosa_nb_knn", 10);

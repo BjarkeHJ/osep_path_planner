@@ -124,6 +124,7 @@ private:
     /* Helper */
     void graph_decomp();
     void merge_into(int keep, int del);
+    bool size_assert();
 
     /* Params */
     GSkelConfig cfg_;

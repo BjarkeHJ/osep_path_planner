@@ -161,8 +161,8 @@ bool GSkel::increment_skeleton() {
 
     for (auto& v : GD.prelim_vers) {
         if (v.just_approved && v.position.getVector3fMap().z() > cfg_.gnd_th) {
-            // GD.global_vers.emplace_back(std::move(v)); // move (remove from prelim)
-            GD.global_vers.emplace_back(v); // copy
+            GD.global_vers.emplace_back(std::move(v)); // move (remove from prelim)
+            // GD.global_vers.emplace_back(v); // copy
             GD.global_vers_cloud->points.emplace_back(v.position);
             GD.new_vers_indxs.push_back(GD.global_vers.size() - 1);
             v.just_approved = false;
@@ -194,7 +194,8 @@ bool GSkel::increment_skeleton() {
         GD.gskel_size = GD.global_vers.size();
     }
 
-    return 1;
+    if (GD.new_vers_indxs.size() == 0) return 0;
+    else return 1;
 }
 
 bool GSkel::graph_adj() {
@@ -241,7 +242,7 @@ bool GSkel::graph_adj() {
     }
 
     GD.global_adj = new_adj; // replace old adjencency
-    return 1;
+    return size_assert();
 }
 
 bool GSkel::mst() {
@@ -275,11 +276,11 @@ bool GSkel::mst() {
 
     GD.global_adj = std::move(mst_adj);
     graph_decomp();
-    return 1;
+    // return 1;
+    return size_assert();
 }
 
 bool GSkel::vertex_merge() {
-    // int N = GD.global_vers.size();
     int N_new = GD.new_vers_indxs.size();
     if (GD.gskel_size == 0 || N_new == 0) return 0;
     if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 0; // initialization of structure (change??)
@@ -291,8 +292,13 @@ bool GSkel::vertex_merge() {
     std::set<int> to_delete;
 
     for (int new_id : GD.new_vers_indxs) {
-        for (int nb_id : GD.global_adj[new_id]) {
-            if (new_id == nb_id || to_delete.count(new_id) || to_delete.count(nb_id)) continue;
+        if (new_id < 0 || new_id >= (int)GD.gskel_size) continue;
+        if (to_delete.count(new_id)) continue;
+
+        const auto& nbrs = GD.global_adj[new_id];
+        for (int nb_id : nbrs) {
+            if (nb_id < 0 || nb_id >= (int)GD.gskel_size) continue;
+            if (new_id == nb_id || to_delete.count(nb_id)) continue;
 
             bool do_merge = false;
             if (is_joint(new_id) && is_joint(nb_id)) {
@@ -300,15 +306,17 @@ bool GSkel::vertex_merge() {
                 GD.joints.erase(std::remove(GD.joints.begin(), GD.joints.end(), nb_id), GD.joints.end());
             }
 
-            float dist = (GD.global_vers[new_id].position.getVector3fMap() - GD.global_vers[nb_id].position.getVector3fMap()).norm();
-            if (!do_merge && dist < 0.5 * cfg_.fuse_dist_th) {
+            const auto &Vi = GD.global_vers[new_id];
+            const auto &Vj = GD.global_vers[nb_id];
+            float dist = (Vi.position.getVector3fMap() - Vj.position.getVector3fMap()).norm();
+
+            if (!do_merge && dist < 0.5f * cfg_.fuse_dist_th) {
                 do_merge = true;
             }
 
             if (!do_merge) continue;
 
             merge_into(nb_id, new_id);
-
             to_delete.insert(new_id);
             break;
         }
@@ -317,25 +325,31 @@ bool GSkel::vertex_merge() {
     if (to_delete.empty()) return 1; // end with success - no need to merge
 
     for (auto it = to_delete.rbegin(); it != to_delete.crend(); ++it) {
-        GD.global_vers.erase(GD.global_vers.begin() + *it);
-        GD.global_vers_cloud->points.erase(GD.global_vers_cloud->points.begin() + *it);
-        GD.global_adj.erase(GD.global_adj.begin() + *it);
+        const int del = *it;
+        if (del < 0 || del > static_cast<int>(GD.global_vers.size())) continue;
+        
+        GD.global_vers.erase(GD.global_vers.begin() + del);
+        GD.global_vers_cloud->points.erase(GD.global_vers_cloud->points.begin() + del);
+        GD.global_adj.erase(GD.global_adj.begin() + del);
+
         for (auto &nbrs : GD.global_adj) {
-            nbrs.erase(std::remove(nbrs.begin(), nbrs.end(), *it), nbrs.end());
+            nbrs.erase(std::remove(nbrs.begin(), nbrs.end(), del), nbrs.end());
             for (auto &v : nbrs) {
-                if (v > *it) --v;
+                if (v > del) --v;
             }
+            std::sort(nbrs.begin(), nbrs.end());
+            nbrs.erase(std::unique(nbrs.begin(), nbrs.end()), nbrs.end());
         }
 
-        GD.new_vers_indxs.erase(std::remove(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end(), *it), GD.new_vers_indxs.end());
+        GD.new_vers_indxs.erase(std::remove(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end(), del), GD.new_vers_indxs.end());
         for (auto &id : GD.new_vers_indxs) {
-            if (id > *it) --id;
+            if (id > del) --id;
         }
     }
 
     GD.gskel_size = GD.global_vers.size();
     graph_decomp();
-    return 1;
+    return size_assert();
 }
 
 bool GSkel::prune() {
@@ -574,6 +588,13 @@ void GSkel::merge_into(int keep, int del) {
     }
 }
 
+bool GSkel::size_assert() {
+    const int A = static_cast<int>(GD.global_vers.size());
+    const int B = static_cast<int>(GD.global_vers_cloud->points.size());
+    const int C = static_cast<int>(GD.global_adj.size());
+    const int D = static_cast<int>(GD.gskel_size);
 
-
+    const bool ok = (A == B) && (B == C) && (C == D);
+    return ok;
+}
 
