@@ -12,6 +12,7 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
   this->declare_parameter("global_map_size", 1500.0);  // Global map size (1500 m x 1500 m)
   this->declare_parameter("frame_id", "base_link");    // Map centered at base_link
   this->declare_parameter("safety_distance", 10.0);  // Central safety distance
+  this->declare_parameter("costmap_topic", "/local_costmap/costmap");
 
   resolution_ = this->get_parameter("resolution").as_double();
   free_center_radius_ = this->get_parameter("free_center_radius").as_double();
@@ -19,8 +20,10 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
   global_map_size_ = this->get_parameter("global_map_size").as_double();
   frame_id_ = this->get_parameter("frame_id").as_string();
   safety_distance_ = this->get_parameter("safety_distance").as_double();
+  costmap_topic_ = this->get_parameter("costmap_topic").as_string();
   safety_distance_min_ = safety_distance_ - 0.2 * safety_distance_;
   safety_distance_max_ = safety_distance_ + 0.2 * safety_distance_;
+
 
   // Compute grid dimensions
   local_grid_size_ = static_cast<int>(local_map_size_ / resolution_);
@@ -45,10 +48,10 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
   );
 
   // Publisher for the global cost map
-  global_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/global_costmap/costmap", 10);
+  global_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("osep/global_costmap/costmap", 10);
 
   // Publisher for the local cost map
-  local_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/local_costmap/costmap", 10);
+  local_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(costmap_topic_, 10);
 
   RCLCPP_INFO(this->get_logger(), "ESDF cost map node initialized.");
 }

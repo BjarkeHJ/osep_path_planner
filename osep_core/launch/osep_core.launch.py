@@ -4,6 +4,15 @@ from launch_ros.actions import Node
 FRAME_ID = "base_link"
 SAFETY_DISTANCE = 10.0
 
+TOPIC_NAMES = {
+    "VEL_CMD": '/osep/vel_cmd',
+    "PATH": '/osep/path',
+    "COSTMAP": '/osep/local_costmap/costmap',
+    "VIEWPOINTS": '/osep/viewpoints',
+    "VIEWPOINTS_ADJUSTED": '/osep/viewpoints_adjusted',
+    "GROUND_TRUTH": '/osep/ground_truth'
+}
+
 def generate_launch_description():
     return LaunchDescription([
         Node(
@@ -18,6 +27,7 @@ def generate_launch_description():
                 {"global_map_size": 1600.0},
                 {"frame_id": FRAME_ID},
                 {"safety_distance": SAFETY_DISTANCE},
+                {"costmap_topic": TOPIC_NAMES["COSTMAP"]},
             ]
         ),
         Node(
@@ -28,9 +38,11 @@ def generate_launch_description():
             parameters=[
                 {"frame_id": FRAME_ID},
                 {"interpolation_distance": 2.0},
-                {"costmap_topic": "/local_costmap/costmap"},
-                {"waypoints_topic": "/osep/viewpoints"},
-                {"path_planner_prefix": "/planner"},
+                {"costmap_topic": TOPIC_NAMES["COSTMAP"]},
+                {"viewpoints_topic": TOPIC_NAMES["VIEWPOINTS"]},
+                {"path_topic": TOPIC_NAMES["PATH"]},
+                {"ground_truth_topic": TOPIC_NAMES["GROUND_TRUTH"]},
+                {"viewpoints_adjusted_topic": TOPIC_NAMES["VIEWPOINTS_ADJUSTED"]},
                 {"ground_truth_update_interval": 8000},
                 {"safety_distance": SAFETY_DISTANCE},
             ]
