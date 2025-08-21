@@ -14,6 +14,7 @@ set(EXEC_PLAN osep_planner)
 set(EXEC_VIEW osep_viewpoint_manager)
 
 # ROS2 dependencies
+find_package(osep_skeleton_decomp)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(pcl_conversions REQUIRED)
