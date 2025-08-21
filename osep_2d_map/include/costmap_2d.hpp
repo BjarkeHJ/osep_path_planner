@@ -34,6 +34,7 @@ private:
   double safety_distance_min_;
   double safety_distance_max_;
   std::string frame_id_;
+  std::string costmap_topic_;
 
   // --- TF2 Buffer and Listener ---
   tf2_ros::Buffer tf_buffer_;
