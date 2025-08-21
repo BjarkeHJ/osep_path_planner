@@ -1,7 +1,0 @@
-#ifndef VIEWPOINT_MAIN_HPP_
-#define VIEWPOINT_MAIN_HPP_
-
-
-
-
-#endif // VIEWPOINT_MAIN_HPP_
