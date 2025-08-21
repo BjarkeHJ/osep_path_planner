@@ -6,6 +6,8 @@ Main algorithm for local ROSA Point computation
 Consider normalization of point cloud data prior to processing (for ease of parameter tuning)
 OBS: de-normalize before returning...
 
+Consider downsampling prior to normal estimation (keeping many points ~1000)
+
 TODO: REMOVE ANY VERTICES THAT ARE FAR AWAY FROM POINT CLOUD
 
 */
@@ -34,10 +36,10 @@ Rosa::Rosa(const RosaConfig& cfg) : cfg_(cfg) {
 }
 
 bool Rosa::rosa_run() {
-    auto ts = std::chrono::high_resolution_clock::now();
-    std::cout << "PointCloud size before downsampling: " << (int)RD.orig_->points.size() << std::endl;
+    if (RD.orig_->points.empty()) return 0; // No points received...
+    // auto ts = std::chrono::high_resolution_clock::now();
+    
     RUN_STEP(preprocess);
-    std::cout << "PointCloud size after downsampling: " << (int)RD.pcd_size_ << std::endl;
     RUN_STEP(rosa_init);
     RUN_STEP(similarity_neighbor_extraction);
     RUN_STEP(drosa);
@@ -45,12 +47,9 @@ bool Rosa::rosa_run() {
     RUN_STEP(vertex_sampling);
     RUN_STEP(vertex_smooth);
 
-    std::cout << "Number of vertices: " << RD.skelver.rows() << std::endl;
-
-    auto te = std::chrono::high_resolution_clock::now();
-    auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
-    std::cout << "[ROSA] Time Elapsed: " << telaps << " ms" << std::endl;
-
+    // auto te = std::chrono::high_resolution_clock::now();
+    // auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
+    // std::cout << "[ROSA] Time Elapsed: " << telaps << " ms" << std::endl;
     return running;
 }
 
@@ -59,10 +58,6 @@ bool Rosa::preprocess() {
     RD.nrms_->clear();
     RD.surf_nbs.clear();
     RD.simi_nbs.clear();
-
-    if (RD.orig_->points.empty()) {
-        return false;
-    }
 
     /* Distance Filtering */
     const float r2 = cfg_.pts_dist_lim * cfg_.pts_dist_lim;
@@ -86,6 +81,8 @@ bool Rosa::preprocess() {
     RD.orig_->height = 1;
     RD.orig_->is_dense = true;
     RD.pcd_size_ = RD.orig_->points.size();
+
+    /* CONSIDER DOWNSAMPLING HERE (Perhaps max points can be pushed up then?)*/
 
     /* Normal Estimation */
     if (static_cast<int>(RD.pcd_size_) < cfg_.min_points) {
@@ -283,14 +280,16 @@ bool Rosa::drosa() {
                 vvar(pidx, 0) = symmnormal_variance(new_v, active);
             }
             else {
-                vvar(pidx, 0) = 0.0f;
+                // vvar(pidx, 0) = 0.0f;
+                vvar(pidx, 0) = 1e+3f;
             }
         }
         vset = vnew;
         
-        constexpr float eps = 1e-5;
-        vvar = (vvar.array().square().square() + eps).inverse().matrix();
-        
+        constexpr float eps = 1e-6f;
+        vvar = (vvar.array().square().square() + eps).inverse();//.min(1e3f).matrix();
+        vvar = vvar.array().min(1e3f).max(1e-6f);
+
         // Smoothing...
         for (size_t p=0; p<RD.pcd_size_; ++p) {
             const auto& snb = RD.surf_nbs[p];

@@ -3,8 +3,9 @@
 ROS2 Node for Path Planning
 
 */
-#include <rclcpp/rclcpp.hpp>
 
+#include "planner.hpp"
+#include <rclcpp/rclcpp.hpp>
 
 class PlannerNode : public rclcpp::Node {
 public:
@@ -15,7 +16,7 @@ private:
 };
 
 PlannerNode::PlannerNode() : Node("PlannerNode") {
-
+    
 }
 
 int main(int argc, char** argv) {

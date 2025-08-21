@@ -19,21 +19,19 @@ GSkel::GSkel(const GSkelConfig& cfg) : cfg_(cfg) {
 }
 
 bool GSkel::gskel_run() {
-    auto ts = std::chrono::high_resolution_clock::now();
+    // auto ts = std::chrono::high_resolution_clock::now();
 
     RUN_STEP(increment_skeleton);
-    // std::cout << "[GSKEL] Current Global Skeleton Size: " << GD.gskel_size << std::endl;
     RUN_STEP(graph_adj);
     RUN_STEP(mst);
-    // seg fault here in vertex_merge()
     RUN_STEP(vertex_merge);
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
     RUN_STEP(extract_branches);
 
-    auto te = std::chrono::high_resolution_clock::now();
-    auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
-    std::cout << "[GSKEL] Time Elapsed: " << telaps << " ms" << std::endl;
+    // auto te = std::chrono::high_resolution_clock::now();
+    // auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
+    // std::cout << "[GSKEL] Time Elapsed: " << telaps << " ms" << std::endl;
     return running;
 }
 
@@ -161,8 +159,8 @@ bool GSkel::increment_skeleton() {
 
     for (auto& v : GD.prelim_vers) {
         if (v.just_approved && v.position.getVector3fMap().z() > cfg_.gnd_th) {
-            GD.global_vers.emplace_back(std::move(v)); // move (remove from prelim)
-            // GD.global_vers.emplace_back(v); // copy
+            // GD.global_vers.emplace_back(std::move(v)); // move (remove from prelim)
+            GD.global_vers.emplace_back(v); // copy
             GD.global_vers_cloud->points.emplace_back(v.position);
             GD.new_vers_indxs.push_back(GD.global_vers.size() - 1);
             v.just_approved = false;
