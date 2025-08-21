@@ -33,7 +33,7 @@ public:
 private:
     // --- ROS2 Subscriptions ---
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
-    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr waypoints_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr viewpoints_sub_;
 
     // --- ROS2 Publishers ---
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr viewpoints_adjusted_pub_;
@@ -50,7 +50,7 @@ private:
 
     // --- Map and Path Data ---
     nav_msgs::msg::OccupancyGrid::SharedPtr costmap_;
-    nav_msgs::msg::Path adjusted_waypoints_;
+    nav_msgs::msg::Path adjusted_viewpoints_;
     nav_msgs::msg::Path ground_truth_trajectory_;
 
     // --- Parameters and State ---
@@ -63,14 +63,14 @@ private:
 
     // --- Callbacks ---
     void costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
-    void waypointsCallback(const nav_msgs::msg::Path::SharedPtr msg);
+    void viewpointsCallback(const nav_msgs::msg::Path::SharedPtr msg);
     void updateGroundTruthTrajectory();
     void planAndPublishPath();
 
     // --- Utility Methods ---
     geometry_msgs::msg::PoseStamped getCurrentPosition();
-    std::pair<geometry_msgs::msg::PoseStamped, bool> adjustWaypointForCollision(
-        const geometry_msgs::msg::PoseStamped &waypoint, float distance, float resolution, int max_attempts);
+    std::pair<geometry_msgs::msg::PoseStamped, bool> adjustviewpointForCollision(
+        const geometry_msgs::msg::PoseStamped &viewpoint, float distance, float resolution, int max_attempts);
     tf2::Quaternion interpolateYaw(
         const geometry_msgs::msg::Pose &start_pose,
         const geometry_msgs::msg::Pose &goal_pose,

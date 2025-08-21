@@ -14,16 +14,20 @@ PathInterpolator::PathInterpolator() : Node("planner") {
 	this->declare_parameter<std::string>("frame_id", "base_link");
 	this->declare_parameter<double>("interpolation_distance", 2.0);
 	this->declare_parameter<std::string>("costmap_topic", "/local_costmap/costmap");
-	this->declare_parameter<std::string>("waypoints_topic", "/oscep/waypoints");
-	this->declare_parameter<std::string>("path_planner_prefix", "/planner");
+	this->declare_parameter<std::string>("viewpoints_topic", "/viewpoints");
+	this->declare_parameter<std::string>("viewpoints_adjusted_topic", "/viewpoints_adjusted");
+	this->declare_parameter<std::string>("path_topic", "/path");
+	this->declare_parameter<std::string>("ground_truth_topic", "/ground_truth");
 	this->declare_parameter<int>("ground_truth_update_interval", 2000);
 	this->declare_parameter<double>("safety_distance", 10.0);
 
 	frame_id_ = this->get_parameter("frame_id").as_string();
 	interpolation_distance_ = this->get_parameter("interpolation_distance").as_double();
 	std::string costmap_topic = this->get_parameter("costmap_topic").as_string();
-	std::string waypoints_topic = this->get_parameter("waypoints_topic").as_string();
-	std::string path_planner_prefix = this->get_parameter("path_planner_prefix").as_string();
+	std::string viewpoints_topic = this->get_parameter("viewpoints_topic").as_string();
+	std::string viewpoints_adjusted_topic = this->get_parameter("viewpoints_adjusted_topic").as_string();
+	std::string path_topic = this->get_parameter("path_topic").as_string();
+	std::string ground_truth_topic = this->get_parameter("ground_truth_topic").as_string();
 	int ground_truth_update_interval = this->get_parameter("ground_truth_update_interval").as_int();
 	safety_distance_ = this->get_parameter("safety_distance").as_double();
 	extra_safety_distance_ = 0.1 * safety_distance_;
@@ -45,24 +49,24 @@ PathInterpolator::PathInterpolator() : Node("planner") {
 		costmap_topic, 10,
 		std::bind(&PathInterpolator::costmapCallback, this, std::placeholders::_1));
 
-	waypoints_sub_ = this->create_subscription<nav_msgs::msg::Path>(
-		waypoints_topic, qos_profile,
-		std::bind(&PathInterpolator::waypointsCallback, this, std::placeholders::_1));
+	viewpoints_sub_ = this->create_subscription<nav_msgs::msg::Path>(
+		viewpoints_topic, qos_profile,
+		std::bind(&PathInterpolator::viewpointsCallback, this, std::placeholders::_1));
 
-	viewpoints_adjusted_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_planner_prefix + "/viewpoints_adjusted", 10);
-	raw_path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_planner_prefix + "/raw_path", 10);
-	smoothed_path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_planner_prefix + "/smoothed_path", 10);
-	ground_truth_trajectory_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_planner_prefix + "/ground_truth_trajectory", 10);
+	viewpoints_adjusted_pub_ = this->create_publisher<nav_msgs::msg::Path>(viewpoints_adjusted_topic, 10);
+	raw_path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic + "/raw_path", 10);
+	smoothed_path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic, 10);
+	ground_truth_trajectory_pub_ = this->create_publisher<nav_msgs::msg::Path>(ground_truth_topic, 10);
 }
 
 void PathInterpolator::costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
 	costmap_ = msg;
-	if (!adjusted_waypoints_.poses.empty()) {
+	if (!adjusted_viewpoints_.poses.empty()) {
 		planAndPublishPath();
 	}
 }
 
-void PathInterpolator::waypointsCallback(const nav_msgs::msg::Path::SharedPtr msg) {
+void PathInterpolator::viewpointsCallback(const nav_msgs::msg::Path::SharedPtr msg) {
 	if (!costmap_) {
 		RCLCPP_ERROR(this->get_logger(), "Costmap is null");
 		return;
@@ -71,20 +75,20 @@ void PathInterpolator::waypointsCallback(const nav_msgs::msg::Path::SharedPtr ms
 		RCLCPP_WARN(this->get_logger(), "Received empty Path message");
 		return;
 	}
-	nav_msgs::msg::Path all_adjusted_waypoints;
-	all_adjusted_waypoints.header = msg->header;
+	nav_msgs::msg::Path all_adjusted_viewpoints;
+	all_adjusted_viewpoints.header = msg->header;
 
-	adjusted_waypoints_.header = msg->header;
-	adjusted_waypoints_.poses.clear();
+	adjusted_viewpoints_.header = msg->header;
+	adjusted_viewpoints_.poses.clear();
 
 	for (const auto &pose : msg->poses) {
-		auto [adjusted_pose, _] = adjustWaypointForCollision(pose, extra_safety_distance_, costmap_->info.resolution, 10);
-		all_adjusted_waypoints.poses.push_back(adjusted_pose);
+		auto [adjusted_pose, _] = adjustviewpointForCollision(pose, extra_safety_distance_, costmap_->info.resolution, 10);
+		all_adjusted_viewpoints.poses.push_back(adjusted_pose);
 		if (!adjusted_pose.header.frame_id.empty()) {
-			adjusted_waypoints_.poses.push_back(adjusted_pose);
+			adjusted_viewpoints_.poses.push_back(adjusted_pose);
 		}
 	}
-	viewpoints_adjusted_pub_->publish(all_adjusted_waypoints);
+	viewpoints_adjusted_pub_->publish(all_adjusted_viewpoints);
 }
 
 geometry_msgs::msg::PoseStamped PathInterpolator::getCurrentPosition() {
@@ -120,45 +124,45 @@ void PathInterpolator::updateGroundTruthTrajectory() {
 	ground_truth_trajectory_pub_->publish(ground_truth_trajectory_);
 }
 
-std::pair<geometry_msgs::msg::PoseStamped, bool> PathInterpolator::adjustWaypointForCollision(
-	const geometry_msgs::msg::PoseStamped &waypoint, float distance, float resolution, int max_attempts) {
-	geometry_msgs::msg::PoseStamped adjusted_waypoint = waypoint;
+std::pair<geometry_msgs::msg::PoseStamped, bool> PathInterpolator::adjustviewpointForCollision(
+	const geometry_msgs::msg::PoseStamped &viewpoint, float distance, float resolution, int max_attempts) {
+	geometry_msgs::msg::PoseStamped adjusted_viewpoint = viewpoint;
 	bool was_adjusted = false;
 	if (!costmap_) {
 		RCLCPP_ERROR(this->get_logger(), "Costmap is null");
-		adjusted_waypoint.header.frame_id = "";
-		return {adjusted_waypoint, was_adjusted};
+		adjusted_viewpoint.header.frame_id = "";
+		return {adjusted_viewpoint, was_adjusted};
 	}
 	tf2::Quaternion quat;
-	tf2::fromMsg(adjusted_waypoint.pose.orientation, quat);
+	tf2::fromMsg(adjusted_viewpoint.pose.orientation, quat);
 	double yaw = tf2::getYaw(quat);
 	for (int attempt = 0; attempt < max_attempts; ++attempt) {
-		int x_index = static_cast<int>((adjusted_waypoint.pose.position.x - costmap_->info.origin.position.x) / resolution);
-		int y_index = static_cast<int>((adjusted_waypoint.pose.position.y - costmap_->info.origin.position.y) / resolution);
+		int x_index = static_cast<int>((adjusted_viewpoint.pose.position.x - costmap_->info.origin.position.x) / resolution);
+		int y_index = static_cast<int>((adjusted_viewpoint.pose.position.y - costmap_->info.origin.position.y) / resolution);
 		if (x_index >= 0 && x_index < static_cast<int>(costmap_->info.width) &&
 			y_index >= 0 && y_index < static_cast<int>(costmap_->info.height)) {
 			int index = y_index * costmap_->info.width + x_index;
 			if (costmap_->data[index] <= obstacle_threshold_) {
-				geometry_msgs::msg::PoseStamped forward_waypoint = adjusted_waypoint;
-				forward_waypoint.pose.position.x += distance * std::cos(yaw);
-				forward_waypoint.pose.position.y += distance * std::sin(yaw);
-				int forward_x_index = static_cast<int>((forward_waypoint.pose.position.x - costmap_->info.origin.position.x) / resolution);
-				int forward_y_index = static_cast<int>((forward_waypoint.pose.position.y - costmap_->info.origin.position.y) / resolution);
+				geometry_msgs::msg::PoseStamped forward_viewpoint = adjusted_viewpoint;
+				forward_viewpoint.pose.position.x += distance * std::cos(yaw);
+				forward_viewpoint.pose.position.y += distance * std::sin(yaw);
+				int forward_x_index = static_cast<int>((forward_viewpoint.pose.position.x - costmap_->info.origin.position.x) / resolution);
+				int forward_y_index = static_cast<int>((forward_viewpoint.pose.position.y - costmap_->info.origin.position.y) / resolution);
 				if (forward_x_index >= 0 && forward_x_index < static_cast<int>(costmap_->info.width) &&
 					forward_y_index >= 0 && forward_y_index < static_cast<int>(costmap_->info.height)) {
 					int forward_index = forward_y_index * costmap_->info.width + forward_x_index;
 					if (costmap_->data[forward_index] <= obstacle_threshold_) {
-						return {adjusted_waypoint, was_adjusted};
+						return {adjusted_viewpoint, was_adjusted};
 					}
 				}
 			}
 		}
-		adjusted_waypoint.pose.position.x -= distance * std::cos(yaw);
-		adjusted_waypoint.pose.position.y -= distance * std::sin(yaw);
+		adjusted_viewpoint.pose.position.x -= distance * std::cos(yaw);
+		adjusted_viewpoint.pose.position.y -= distance * std::sin(yaw);
 		was_adjusted = true;
 	}
-	adjusted_waypoint.header.frame_id = "";
-	return {adjusted_waypoint, was_adjusted};
+	adjusted_viewpoint.header.frame_id = "";
+	return {adjusted_viewpoint, was_adjusted};
 }
 
 tf2::Quaternion PathInterpolator::interpolateYaw(
@@ -183,7 +187,7 @@ tf2::Quaternion PathInterpolator::interpolateYaw(
 }
 
 void PathInterpolator::planAndPublishPath() {
-	if (!costmap_ || adjusted_waypoints_.poses.empty()) {
+	if (!costmap_ || adjusted_viewpoints_.poses.empty()) {
 		RCLCPP_ERROR(this->get_logger(), "Cannot plan path: costmap or trajectory path is missing");
 		return;
 	}
@@ -196,8 +200,8 @@ void PathInterpolator::planAndPublishPath() {
 	init_path.header.stamp = this->now();
 	init_path.header.frame_id = costmap_->header.frame_id;
 	init_path.poses.push_back(current_position);
-	for (const auto &waypoint : adjusted_waypoints_.poses) {
-		init_path.poses.push_back(waypoint);
+	for (const auto &viewpoint : adjusted_viewpoints_.poses) {
+		init_path.poses.push_back(viewpoint);
 	}
 	nav_msgs::msg::Path raw_path;
 	raw_path.header.stamp = this->now();
@@ -209,7 +213,7 @@ void PathInterpolator::planAndPublishPath() {
 		const auto &goal = init_path.poses[i + 1];
 		auto segment_path = planPath(start, goal);
 		if (segment_path.empty()) {
-			RCLCPP_ERROR(this->get_logger(), "Failed to plan a valid path segment between waypoints %zu and %zu.", i, i + 1);
+			RCLCPP_ERROR(this->get_logger(), "Failed to plan a valid path segment between viewpoints %zu and %zu.", i, i + 1);
 			path_invalid_flag_ = true;
 			idx = i;
 			break;
@@ -221,7 +225,7 @@ void PathInterpolator::planAndPublishPath() {
 		RCLCPP_ERROR(this->get_logger(), "Path planning failed. Marking the path as invalid and aborting.");
 		smoothed_path.header.stamp = this->now();
 		smoothed_path.header.frame_id = costmap_->header.frame_id;
-		geometry_msgs::msg::PoseStamped current_position_adjusted = adjustWaypointForCollision(current_position, extra_safety_distance_, costmap_->info.resolution, 10).first;
+		geometry_msgs::msg::PoseStamped current_position_adjusted = adjustviewpointForCollision(current_position, extra_safety_distance_, costmap_->info.resolution, 10).first;
 		if (current_position_adjusted.header.frame_id.empty()) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to adjust current position for collision-free zone");
 			nav_msgs::msg::Path empty_path;
@@ -257,7 +261,7 @@ std::vector<geometry_msgs::msg::PoseStamped> PathInterpolator::planPath(
 	auto heuristic = [&](int x1, int y1, int x2, int y2) {
 		return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
 	};
-	std::vector<geometry_msgs::msg::PoseStamped> waypoints = {start};
+	std::vector<geometry_msgs::msg::PoseStamped> viewpoints = {start};
 	float distance = std::sqrt(
 		std::pow(goal.pose.position.x - start.pose.position.x, 2) +
 		std::pow(goal.pose.position.y - start.pose.position.y, 2) +
@@ -273,24 +277,24 @@ std::vector<geometry_msgs::msg::PoseStamped> PathInterpolator::planPath(
 			intermediate.pose.position.z = start.pose.position.z + t * (goal.pose.position.z - start.pose.position.z);
 			tf2::Quaternion quaternion = interpolateYaw(start.pose, goal.pose, t);
 			intermediate.pose.orientation = tf2::toMsg(quaternion);
-			auto [adjusted_intermediate, was_adjusted] = adjustWaypointForCollision(intermediate, extra_safety_distance_, resolution, 10);
+			auto [adjusted_intermediate, was_adjusted] = adjustviewpointForCollision(intermediate, extra_safety_distance_, resolution, 10);
 			if (adjusted_intermediate.header.frame_id.empty()) {
 				invalid_flag = true;
 				break;
 			} else {
 				if (was_adjusted) {
-					waypoints.push_back(adjusted_intermediate);
+					viewpoints.push_back(adjusted_intermediate);
 				}
 			}
 		}
 	}
-	waypoints.push_back(goal);
+	viewpoints.push_back(goal);
 	if (!invalid_flag) {
-		return waypoints;
+		return viewpoints;
 	}
 	std::vector<geometry_msgs::msg::PoseStamped> full_path;
-	if (waypoints.size() < 2) {
-		RCLCPP_ERROR(this->get_logger(), "Not enough waypoints to plan a path");
+	if (viewpoints.size() < 2) {
+		RCLCPP_ERROR(this->get_logger(), "Not enough viewpoints to plan a path");
 		return {};
 	}
 	int start_x = static_cast<int>((start.pose.position.x - costmap_->info.origin.position.x) / resolution);
@@ -364,7 +368,7 @@ std::vector<geometry_msgs::msg::PoseStamped> PathInterpolator::planPath(
 	}
 	std::vector<geometry_msgs::msg::PoseStamped> adjusted_full_path;
 	for (const auto &pose : full_path) {
-		auto [adjusted_pose, was_adjusted] = adjustWaypointForCollision(pose, extra_safety_distance_, costmap_->info.resolution, 5);
+		auto [adjusted_pose, was_adjusted] = adjustviewpointForCollision(pose, extra_safety_distance_, costmap_->info.resolution, 5);
 		adjusted_full_path.push_back(adjusted_pose);
 	}
 	adjusted_full_path.erase(
@@ -472,14 +476,14 @@ std::vector<geometry_msgs::msg::PoseStamped> PathInterpolator::smoothPath(
 		quaternion.setRPY(0, 0, yaw_smooth[i]);
 		pose.pose.orientation = tf2::toMsg(quaternion);
 		auto adjusted_it = std::find_if(
-			adjusted_waypoints_.poses.begin(), adjusted_waypoints_.poses.end(),
+			adjusted_viewpoints_.poses.begin(), adjusted_viewpoints_.poses.end(),
 			[&pose, interpolation_distance](const geometry_msgs::msg::PoseStamped &adjusted_pose) {
 				return std::sqrt(
 					std::pow(pose.pose.position.x - adjusted_pose.pose.position.x, 2) +
 					std::pow(pose.pose.position.y - adjusted_pose.pose.position.y, 2) +
 					std::pow(pose.pose.position.z - adjusted_pose.pose.position.z, 2)) <= interpolation_distance;
 			});
-		if (adjusted_it != adjusted_waypoints_.poses.end()) {
+		if (adjusted_it != adjusted_viewpoints_.poses.end()) {
 			smoothed_path.push_back(*adjusted_it);
 		} else {
 			smoothed_path.push_back(pose);
