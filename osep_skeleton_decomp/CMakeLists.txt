@@ -1,55 +1,74 @@
 cmake_minimum_required(VERSION 3.8)
 cmake_policy(SET CMP0074 NEW)
-project(osep_rosa)
+project(osep_skeleton_decomp)
 
-# if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-#   add_compile_options(-Wall -Wextra -Wpedantic)
-# endif()
-
+# Set compile constraints
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++17")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(EXEC_NAME osep_rosa)
+# Define executable
+set(EXEC_ROSA osep_rosa)
+set(EXEC_GSKEL osep_gskel)
 
 # ROS2 dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(pcl_conversions REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 # Dependencies list
 set(dependencies
     rclcpp
-    sensor_msgs
-    visualization_msgs
     pcl_conversions
     tf2_ros
-    tf2_sensor_msgs)
+    tf2_sensor_msgs
+    sensor_msgs
+    geometry_msgs)
 
 # Other libraries
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 
-add_executable(${EXEC_NAME}
+add_executable(${EXEC_ROSA}
                 src/rosa_node.cpp
-                src/rosa_main.cpp
-                src/extract_tools.cpp)
+                src/rosa.cpp)
 
-target_include_directories(${EXEC_NAME} PUBLIC
-                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                            $<INSTALL_INTERFACE:include>
-                            ${PCL_INCLUDE_DIRS})
+add_executable(${EXEC_GSKEL}
+                src/gskel_node.cpp
+                src/gskel.cpp)
+        
+foreach(tgt IN ITEMS ${EXEC_ROSA} ${EXEC_GSKEL})
 
-target_link_libraries(${EXEC_NAME} ${PCL_LIBRARIES} Eigen3::Eigen)
-ament_target_dependencies(${EXEC_NAME} ${dependencies})
+  target_include_directories(${tgt} PUBLIC
+                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                              $<INSTALL_INTERFACE:include>
+                              ${PCL_INCLUDE_DIRS})
 
-install(TARGETS ${EXEC_NAME} DESTINATION lib/${PROJECT_NAME})
+  target_link_libraries(${tgt} 
+                        ${PCL_LIBRARIES} 
+                        Eigen3::Eigen)
+
+  ament_target_dependencies(${tgt} 
+                            ${dependencies})
+
+  target_compile_features(${tgt} 
+                          PUBLIC cxx_std_17)
+
+endforeach()
+
+install(TARGETS 
+        ${EXEC_ROSA}
+        ${EXEC_GSKEL} 
+        DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY include/
+        DESTINATION include)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

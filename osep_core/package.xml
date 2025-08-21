@@ -15,8 +15,10 @@
   <exec_depend>pcl_conversions</exec_depend>
 
 <!-- Local dependencies -->
-  <exec_depend>osep_planning</exec_depend>
   <exec_depend>osep_data_publisher</exec_depend>
+  <exec_depend>osep_skeleton_decomp</exec_depend>
+  <exec_depend>osep_viewpoint_manager</exec_depend>
+  <exec_depend>osep_planning</exec_depend>
   <exec_depend>osep_rosa</exec_depend>
   <exec_depend>osep_2d_map</exec_depend>
 
