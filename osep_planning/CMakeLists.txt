@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Define executable
-set(EXEC_PLAN osep_planer)
+set(EXEC_PLAN osep_planner)
 set(EXEC_VIEW osep_viewpoint_manager)
 
 # ROS2 dependencies
