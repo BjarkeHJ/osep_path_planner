@@ -14,7 +14,16 @@
     } while (0)
 
 struct ViewpointConfig {
+    int test;
+};
 
+struct Vertex {
+    int vid = -1;
+    std::vector<int> nb_ids;
+    pcl::PointXYZ position;
+    int type = 0;
+    bool pos_update = false;
+    bool type_update = false;
 };
 
 struct Viewpoint {
@@ -29,18 +38,17 @@ struct Viewpoint {
 };
 
 struct ViewpointData {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr gskel;
+    size_t gskel_size;
+    std::vector<Vertex> global_skel;
     std::vector<Viewpoint> global_vpts;
-
 };    
 
 
 class ViewpointManager {
 public:
     ViewpointManager(const ViewpointConfig &cfg);
-    bool viewpoint_manager_run();
-    pcl::PointCloud<pcl::PointXYZ>& input_skeleton() { return *VD.gskel; }
-
+    bool viewpoint_run();
+    std::vector<Vertex>& input_skeleton() { return VD.global_skel; }
 
 private:
     /* Functions */

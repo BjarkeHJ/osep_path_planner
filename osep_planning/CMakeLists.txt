@@ -14,8 +14,8 @@ set(EXEC_PLAN osep_planner)
 set(EXEC_VIEW osep_viewpoint_manager)
 
 # ROS2 dependencies
-find_package(osep_skeleton_decomp)
 find_package(ament_cmake REQUIRED)
+find_package(osep_skeleton_decomp)
 find_package(rclcpp REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -30,18 +30,21 @@ set(dependencies
     tf2_ros
     tf2_sensor_msgs
     sensor_msgs
-    geometry_msgs)
+    geometry_msgs
+    osep_skeleton_decomp)
 
 # Other libraries
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 
 add_executable(${EXEC_PLAN}
-                src/planner_node.cpp)
+                src/planner_node.cpp
+                src/planner.cpp)
 
 add_executable(${EXEC_VIEW}
-                src/viewpoint_manager_node.cpp)
-        
+                src/viewpoint_manager_node.cpp
+                src/viewpoint_manager.cpp)
+
 foreach(tgt IN ITEMS ${EXEC_PLAN} ${EXEC_VIEW})
 
   target_include_directories(${tgt} PUBLIC

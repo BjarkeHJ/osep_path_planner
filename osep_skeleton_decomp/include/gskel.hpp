@@ -70,7 +70,8 @@ struct UnionFind {
 
 struct Vertex {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
+    int vid = -1;
+    std::vector<int> nb_ids;
     pcl::PointXYZ position;
     VertexLKF kf;
 
@@ -82,8 +83,8 @@ struct Vertex {
     bool frozen = false;
     bool conf_check = false;
     bool marked_for_deletion = false;
-    bool updated = false;
-    bool spawned_viewpoints = false;
+    bool pos_update = false;
+    bool type_update = false;
 };
 
 struct GSkelData {
@@ -101,6 +102,7 @@ struct GSkelData {
     std::vector<std::vector<int>> global_adj;
     std::vector<Edge> edges;
 
+    int next_vid = 0;
     size_t gskel_size;
 };
 
@@ -110,7 +112,8 @@ public:
     explicit GSkel(const GSkelConfig& cfg);
     bool gskel_run();
     pcl::PointCloud<pcl::PointXYZ>& input_vertices() { return *GD.new_cands; }
-    pcl::PointCloud<pcl::PointXYZ>::Ptr& output_gskel() { return GD.global_vers_cloud; }
+    pcl::PointCloud<pcl::PointXYZ>::Ptr& output_cloud() { return GD.global_vers_cloud; }
+    std::vector<Vertex>& output_vertices() { return GD.global_vers; }
 
 private:
     /* Functions */
@@ -121,8 +124,10 @@ private:
     bool prune();
     bool smooth_vertex_positions();
     bool extract_branches();
+    bool vid_manager();
 
     /* Helper */
+    void build_cloud_from_vertices();
     void graph_decomp();
     void merge_into(int keep, int del);
     bool size_assert();
@@ -141,6 +146,8 @@ private:
 
 
 };
+
+
 
 
 #endif // GSKEL_HPP_

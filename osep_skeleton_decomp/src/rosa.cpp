@@ -10,6 +10,8 @@ Consider downsampling prior to normal estimation (keeping many points ~1000)
 
 TODO: REMOVE ANY VERTICES THAT ARE FAR AWAY FROM POINT CLOUD
 
+TODO: For normal estimation and neigborhood use radius instead of KNN
+
 */
 
 #include <rosa.hpp>
@@ -264,15 +266,16 @@ bool Rosa::drosa() {
     }   
 
     /* ROSA POINT ORIENTATION*/
-    Eigen::Vector3f p, n, new_v;
+    Eigen::Vector3f p, v, new_v;
     std::vector<int> active;
-    Eigen::MatrixXf vnew = Eigen::MatrixXf::Zero(RD.pcd_size_, 3);
     
     for (int it=0; it<cfg_.niter_drosa; ++it) {
+        Eigen::MatrixXf vnew = Eigen::MatrixXf::Zero(RD.pcd_size_, 3);
+
         for (size_t pidx=0; pidx<RD.pcd_size_; ++pidx) {
             p = pset.row(pidx);
-            n = vset.row(pidx);
-            active = compute_active_samples(pidx, p, n);
+            v = vset.row(pidx);
+            active = compute_active_samples(pidx, p, v); // Extract point cloud slice according to the plane equation from v
             
             if (!active.empty()) {
                 new_v = compute_symmetrynormal(active);
@@ -280,47 +283,54 @@ bool Rosa::drosa() {
                 vvar(pidx, 0) = symmnormal_variance(new_v, active);
             }
             else {
+                vnew.row(pidx) = vset.row(pidx);
                 // vvar(pidx, 0) = 0.0f;
                 vvar(pidx, 0) = 1e+3f;
             }
         }
-        vset = vnew;
+        vset = vnew; // Overwrite 
         
         constexpr float eps = 1e-6f;
-        vvar = (vvar.array().square().square() + eps).inverse();//.min(1e3f).matrix();
-        vvar = vvar.array().min(1e3f).max(1e-6f);
+        vvar = (vvar.array().square().square() + eps).inverse(); // ~1/(vvar⁴ + eps)
 
         // Smoothing...
         for (size_t p=0; p<RD.pcd_size_; ++p) {
             const auto& snb = RD.surf_nbs[p];
             if (snb.empty()) continue;
             
+            // Compute weighted covariance among the surface neighbors and solve for the principal axis
+            // M = sum_i (w_i * v_i * w_i^T) = V^T diag(w) V
             Eigen::Matrix3f M = Eigen::Matrix3f::Zero();
             for (int j : snb) {
+                if (j == (int)p) continue;
                 const Eigen::Vector3f v = vset.row(j).transpose();
                 const float w = vvar(j,0);
                 M.noalias() += w * (v * v.transpose());
             }
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es(M);
-            vset.row(p) = es.eigenvectors().col(2).transpose();
-            vset.row(p).normalize();
+            Eigen::Vector3f principal = es.eigenvectors().col(2);
+            principal.normalize();
+            vset.row(p) = principal.transpose();
         }
     }
     
     /* ROSA POINT POSITION */
-    float PLANAR_TH = 0.1;
+    // float PLANAR_TH = 0.1;
+    float PLANAR_TH = 0.0; // disable
+    std::vector<int> good_ids;
+    std::vector<int> poor_ids;
     std::vector<Eigen::Vector3f> goodCenters;
-    tmp_pt_->resize(RD.pcd_size_);
-    std::vector<int> poorIdx;
+    good_ids.reserve(RD.pcd_size_);
+    poor_ids.reserve(RD.pcd_size_);
+    goodCenters.reserve(RD.pcd_size_);
 
     for (size_t pidx=0; pidx<RD.pcd_size_; ++pidx) {
         p = pset.row(pidx);
-        n = vset.row(pidx);
-
-        active = compute_active_samples(pidx, p, n);
+        v = vset.row(pidx);
+        active = compute_active_samples(pidx, p, v);
 
         if (active.empty()) {
-            poorIdx.push_back(pidx);
+            poor_ids.push_back((int)pidx);
             continue;
         }
 
@@ -329,8 +339,8 @@ bool Rosa::drosa() {
         float planar_score = (evals(1) - evals(0)) / std::max(evals(2), eps);
 
         Eigen::Vector3f center_f;
-
         if (planar_score < PLANAR_TH) {
+            std::cout << "PLANAR PCA FALLBACK!" << std::endl;
             Eigen::Vector3f mean_p = Eigen::Vector3f::Zero();
             Eigen::Vector3f mean_n = Eigen::Vector3f::Zero();
             for (int i : active) {
@@ -338,8 +348,7 @@ bool Rosa::drosa() {
                 const auto v = RD.nrms_->points[i].getNormalVector3fMap();
                 const float s2 = v.squaredNorm();
                 const float inv_len = (s2 > 1e-20f) ? (1.0f / std::sqrt(s2)) : 0.0f;
-                const Eigen::Vector3f vn = v * inv_len;
-                mean_n += vn;
+                mean_n += v * inv_len;
             }
             const float inv_m = 1.0f / static_cast<float>(active.size());
             mean_p *= inv_m;
@@ -354,27 +363,33 @@ bool Rosa::drosa() {
         const bool in_range = (center_f - p).norm() < cfg_.max_proj_range;
         if (finite && in_range) {
             pset.row(pidx) = center_f;
-            const pcl::PointXYZ& qp = RD.pts_->points[pidx];
-            tmp_pt_->points[pidx] = qp;
+            good_ids.push_back((int)pidx);
             goodCenters.push_back(center_f);
         }
         else {
-            poorIdx.push_back(pidx);
+            poor_ids.push_back(pidx);
         }
     }
 
-    kd_tree_->setInputCloud(tmp_pt_);
+    if (poor_ids.empty()) return 1; // exit succesfully...
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr goodSrc(new pcl::PointCloud<pcl::PointXYZ>);
+    goodSrc->reserve(good_ids.size());
+    for (int gid : good_ids) {
+        goodSrc->push_back(RD.pts_->points[gid]);
+    }
+
+    kd_tree_->setInputCloud(goodSrc);
     std::vector<int> pair_id(1);
     std::vector<float> pair_dist(1);
-    for (int poor_id : poorIdx) {
+    for (int poor_id : poor_ids) {
         const pcl::PointXYZ& q = RD.pts_->points[poor_id];
         if (kd_tree_->nearestKSearch(q, 1, pair_id, pair_dist) > 0) {
-            const int gid = pair_id[0];
-            pset.row(poor_id) = goodCenters[gid].transpose();
+            const int idx = pair_id[0];
+            pset.row(poor_id) = goodCenters[idx].transpose();
         }
     }
 
-    tmp_pt_->clear();
     return 1;
 }
 

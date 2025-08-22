@@ -6,6 +6,9 @@ a topologically preserving representation of the structure
 Note: If I want to utilize the KF filter after "frozen" is triggered 
 I must change such that when the position (of Vertex) is changed it changes the KF state as well...
 
+TODO: Downsample the skeleton vertices further to extract more meaningfull vertices and longer edges (smaller vertex set)
+      Long branches have few vertices: linear fitting ish...
+
 */
 
 #include <gskel.hpp>
@@ -14,6 +17,7 @@ GSkel::GSkel(const GSkelConfig& cfg) : cfg_(cfg) {
     /* Constructor - Init data structures etc... */
     GD.new_cands.reset(new pcl::PointCloud<pcl::PointXYZ>);
     GD.global_vers_cloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+    GD.global_vers_cloud->points.reserve(10000);
     
     running = 1;
 }
@@ -28,6 +32,7 @@ bool GSkel::gskel_run() {
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
     RUN_STEP(extract_branches);
+    RUN_STEP(vid_manager);
 
     // auto te = std::chrono::high_resolution_clock::now();
     // auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
@@ -37,6 +42,12 @@ bool GSkel::gskel_run() {
 
 bool GSkel::increment_skeleton() {
     if (!GD.new_cands || GD.new_cands->points.empty()) return 0;
+
+    // Reset update flags in global skeleton
+    for (auto& vg : GD.global_vers) {
+        vg.pos_update = false;
+        vg.type_update = false;
+    }
 
     // Reset flags
     for (auto& v : GD.prelim_vers) {
@@ -155,50 +166,29 @@ bool GSkel::increment_skeleton() {
     // Pass confident vertices to the global skeleton
     GD.new_vers_indxs.clear();
     GD.global_vers.reserve(GD.global_vers.size() + GD.prelim_vers.size());
-    GD.global_vers_cloud->points.reserve(GD.global_vers_cloud->points.size() + GD.prelim_vers.size());
-
     for (auto& v : GD.prelim_vers) {
+        if (!pcl::isFinite(v.position)) continue;
+
         if (v.just_approved && v.position.getVector3fMap().z() > cfg_.gnd_th) {
-            // GD.global_vers.emplace_back(std::move(v)); // move (remove from prelim)
-            GD.global_vers.emplace_back(v); // copy
-            GD.global_vers_cloud->points.emplace_back(v.position);
+            GD.global_vers.emplace_back(v); // copy to global vertices
             GD.new_vers_indxs.push_back(GD.global_vers.size() - 1);
             v.just_approved = false;
-            v.updated = true;
         }
     }
 
-    {
-        std::vector<Vertex> kept;
-        kept.reserve(GD.global_vers.size());
-    
-        pcl::PointCloud<pcl::PointXYZ> clean;
-        clean.points.reserve(GD.global_vers.size());
-    
-        for (auto& v : GD.global_vers) {
-            const auto& p = v.position;
-            if (!pcl::isFinite(p)) continue;  // drop NaN/Inf
-            kept.emplace_back(std::move(v));
-            clean.points.emplace_back(p);
-        }
-    
-        GD.global_vers.swap(kept);
-        *GD.global_vers_cloud = std::move(clean);
-    
-        GD.global_vers_cloud->is_dense = true;
-        GD.global_vers_cloud->width  = static_cast<uint32_t>(GD.global_vers_cloud->points.size());
-        GD.global_vers_cloud->height = 1;
-    
-        GD.gskel_size = GD.global_vers.size();
-    }
+    GD.gskel_size = GD.global_vers.size();
 
-    if (GD.new_vers_indxs.size() == 0) return 0;
+    if (GD.new_vers_indxs.size() == 0) {
+        // std::cout << "No new vertices!" << std::endl;
+        return 0; // No reason to proceed with the pipeline 
+    }
     else return 1;
 }
 
 bool GSkel::graph_adj() {
-    if (!GD.global_vers_cloud || GD.global_vers_cloud->empty()) return 0;
+    if (!GD.global_vers_cloud) return 0;
 
+    build_cloud_from_vertices();
     std::vector<std::vector<int>> new_adj(GD.global_vers_cloud->points.size());
     kd_tree_->setInputCloud(GD.global_vers_cloud);
     const int K = 10;
@@ -211,10 +201,12 @@ bool GSkel::graph_adj() {
     for (size_t i=0; i<GD.gskel_size; ++i) {
         indices.clear();
         dist2.clear();
-        int n_nbs = kd_tree_->nearestKSearch(GD.global_vers_cloud->points[i], K, indices, dist2);
+        const auto& vq = GD.global_vers[i];
+        int n_nbs = kd_tree_->nearestKSearch(vq.position, K, indices, dist2);
         for (int j=1; j<n_nbs; ++j) {
             int nb_idx = indices[j];
-            float dist_to_nb = (GD.global_vers[i].position.getVector3fMap() - GD.global_vers[nb_idx].position.getVector3fMap()).norm();
+            const auto& vnb = GD.global_vers[nb_idx];
+            float dist_to_nb = (vq.position.getVector3fMap() - vnb.position.getVector3fMap()).norm();
 
             if (dist_to_nb > max_dist_th) continue;
 
@@ -223,8 +215,9 @@ bool GSkel::graph_adj() {
                 if (k==j) continue;
 
                 int other_nb_idx = indices[k];
-                float dist_nb_to_other = (GD.global_vers[nb_idx].position.getVector3fMap() - GD.global_vers[other_nb_idx].position.getVector3fMap()).norm();
-                float dist_to_other = (GD.global_vers[i].position.getVector3fMap() - GD.global_vers[other_nb_idx].position.getVector3fMap()).norm();
+                const auto& vnb_2 = GD.global_vers[other_nb_idx];
+                float dist_nb_to_other = (vnb.position.getVector3fMap() - vnb_2.position.getVector3fMap()).norm();
+                float dist_to_other = (vq.position.getVector3fMap() - vnb_2.position.getVector3fMap()).norm();
 
                 if (dist_nb_to_other < dist_to_nb && dist_to_other < dist_to_nb) {
                     is_good_nb = false;
@@ -250,9 +243,9 @@ bool GSkel::mst() {
     for (size_t i=0; i<GD.gskel_size; ++i) {
         for (int nb : GD.global_adj[i]) {
             if (nb <= (int)i) continue; // avoid bi-directional check
-            Eigen::Vector3f ver_i = GD.global_vers[i].position.getVector3fMap();
-            Eigen::Vector3f ver_nb = GD.global_vers[nb].position.getVector3fMap();
-            float weight = (ver_i - ver_nb).norm();
+            const Eigen::Vector3f& ver_i = GD.global_vers[i].position.getVector3fMap();
+            const Eigen::Vector3f& ver_nb = GD.global_vers[nb].position.getVector3fMap();
+            const float weight = (ver_i - ver_nb).norm();
             Edge new_edge;
             new_edge.u = i;
             new_edge.v = nb;
@@ -274,14 +267,13 @@ bool GSkel::mst() {
 
     GD.global_adj = std::move(mst_adj);
     graph_decomp();
-    // return 1;
     return size_assert();
 }
 
 bool GSkel::vertex_merge() {
     int N_new = GD.new_vers_indxs.size();
     if (GD.gskel_size == 0 || N_new == 0) return 0;
-    if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 0; // initialization of structure (change??)
+    if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
 
     auto is_joint = [&](int idx) {
         return std::find(GD.joints.begin(), GD.joints.end(), idx) != GD.joints.end();
@@ -314,7 +306,8 @@ bool GSkel::vertex_merge() {
 
             if (!do_merge) continue;
 
-            merge_into(nb_id, new_id);
+            merge_into(nb_id, new_id); // Keeps existing and deletes new_id (after merge)
+
             to_delete.insert(new_id);
             break;
         }
@@ -324,10 +317,9 @@ bool GSkel::vertex_merge() {
 
     for (auto it = to_delete.rbegin(); it != to_delete.crend(); ++it) {
         const int del = *it;
-        if (del < 0 || del > static_cast<int>(GD.global_vers.size())) continue;
+        if (del < 0 || del >= static_cast<int>(GD.global_vers.size())) continue;
         
         GD.global_vers.erase(GD.global_vers.begin() + del);
-        GD.global_vers_cloud->points.erase(GD.global_vers_cloud->points.begin() + del);
         GD.global_adj.erase(GD.global_adj.begin() + del);
 
         for (auto &nbrs : GD.global_adj) {
@@ -353,7 +345,7 @@ bool GSkel::vertex_merge() {
 bool GSkel::prune() {
     int N_new = GD.new_vers_indxs.size();
     if (GD.gskel_size == 0 || N_new == 0) return 0;
-    if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 0; // initialization of structure (change??)
+    if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
 
     std::set<int> joint_set(GD.joints.begin(), GD.joints.end());
     std::set<int> new_set(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end());
@@ -372,7 +364,6 @@ bool GSkel::prune() {
     std::sort(to_delete.rbegin(), to_delete.rend());
     for (int idx : to_delete) {
         GD.global_vers.erase(GD.global_vers.begin() + idx);
-        GD.global_vers_cloud->points.erase(GD.global_vers_cloud->points.begin() + idx);
         GD.global_adj.erase(GD.global_adj.begin() + idx);
         for (auto &nbrs : GD.global_adj) {
             nbrs.erase(std::remove(nbrs.begin(), nbrs.end(), idx), nbrs.end());
@@ -400,32 +391,28 @@ bool GSkel::smooth_vertex_positions() {
         auto &v = GD.global_vers[i];
         auto &nbrs = GD.global_adj[i];
 
-        if (v.type == 1 || v.type == 3) {
-            new_pos[i] = v.position;
-        }
+        new_pos[i] = v.position;
+        if (v.type == 1 || v.type == 3) continue;
+        if (v.smooth_iters <= 0) continue;
 
-        if (v.smooth_iters > 0) {
-            Eigen::Vector3f avg = Eigen::Vector3f::Zero();
-            for (int j : nbrs) {
-                avg += GD.global_vers[j].position.getVector3fMap();
-            }
-            avg /= static_cast<float>(nbrs.size());
-            new_pos[i].getVector3fMap() = (1.0f - cfg_.vertex_smooth_coef)*v.position.getVector3fMap() + cfg_.vertex_smooth_coef*avg;
+        Eigen::Vector3f sum = Eigen::Vector3f::Zero();
+        int cnt = 0;
+        for (int j : nbrs) {
+            if (j < 0 || j >= (int)GD.gskel_size) continue;
+            const auto& p = GD.global_vers[j].position;
+            sum += p.getVector3fMap();
+            cnt++;
+        }
+        if (cnt == 0) continue; // nothing to average - no neighbors
 
-            --v.smooth_iters;
-        }
-        else {
-            new_pos[i] = v.position;
-        }
+        Eigen::Vector3f avg = sum / static_cast<float>(nbrs.size());
+        new_pos[i].getVector3fMap() = (1.0f - cfg_.vertex_smooth_coef)*v.position.getVector3fMap() + cfg_.vertex_smooth_coef*avg;
+        v.pos_update = true;
+        --v.smooth_iters;
     }
 
     for (size_t i=0; i<GD.gskel_size; ++i) {
         GD.global_vers[i].position = new_pos[i];
-    }
-
-    GD.global_vers_cloud->clear();
-    for (const auto &v : GD.global_vers) {
-        GD.global_vers_cloud->points.emplace_back(v.position);
     }
 
     return 1;
@@ -533,13 +520,56 @@ bool GSkel::extract_branches() {
     return 1;
 }
 
+bool GSkel::vid_manager() {
+    for (int idx : GD.new_vers_indxs) {
+        if (idx < 0 || idx >= (int)GD.global_vers.size()) continue;
+        auto &v = GD.global_vers[idx];
+        if (v.vid < 0) {
+            v.vid = GD.next_vid++;
+        }
+    }
+
+    for (size_t idx=0; idx<GD.gskel_size; ++idx) {
+        auto& v = GD.global_vers[idx];
+        const auto& nbrs = GD.global_adj[idx];
+        v.nb_ids.clear();
+        for (int nb : nbrs) {
+            v.nb_ids.push_back(nb);
+        }
+    }
+
+    build_cloud_from_vertices(); // To publish correct cloud 
+    return 1;
+}
+
 /* Helpers */
+void GSkel::build_cloud_from_vertices() {
+    if (GD.global_vers.empty()) return;
+    GD.global_vers_cloud->clear();
+    for (const auto& v : GD.global_vers) {
+        if (!pcl::isFinite(v.position)) {
+            std::cout << "INVALID POSITION!!" << std::endl;
+            continue;
+        }
+        GD.global_vers_cloud->points.push_back(v.position);
+    }
+
+    GD.global_vers_cloud->width  = static_cast<uint32_t>(GD.global_vers_cloud->points.size());
+    GD.global_vers_cloud->height = 1;
+    GD.global_vers_cloud->is_dense = true;
+
+    if (GD.global_vers.size() != GD.global_vers_cloud->points.size()) {
+        std::cout << "NOT SAME SIZE???" << std::endl;
+    }
+}
+
 void GSkel::graph_decomp() {
     GD.joints.clear();
     GD.leafs.clear();
 
-    int N = GD.global_vers.size();
+    const int N = GD.global_vers.size();
     for (int i=0; i<N; ++i) {
+        auto &vg = GD.global_vers[i];
         int degree = GD.global_adj[i].size();
         int v_type = 0;
 
@@ -556,11 +586,12 @@ void GSkel::graph_decomp() {
                 GD.joints.push_back(i);
                 v_type = 3;
             }
-            v_type = 0; // stay 0 (invalid)
             break;
         }
 
-        GD.global_vers[i].type = v_type;
+        // update type
+        if (vg.type != v_type) vg.type_update = true;
+        vg.type = v_type;
     }
 }
 
@@ -569,8 +600,10 @@ void GSkel::merge_into(int keep, int del) {
     auto& Vj = GD.global_vers[del];
 
     int tot = Vi.obs_coubt + Vj.obs_coubt;
+    if (tot == 0) tot = 1;
     Vi.position.getVector3fMap() = (Vi.position.getVector3fMap() * Vi.obs_coubt + Vj.position.getVector3fMap() * Vj.obs_coubt) / static_cast<float>(tot);
     Vi.obs_coubt = tot;
+    Vi.pos_update = true; // position updated
 
     // Remap neighbors 
     for (int nb : GD.global_adj[del]) {
@@ -588,11 +621,9 @@ void GSkel::merge_into(int keep, int del) {
 
 bool GSkel::size_assert() {
     const int A = static_cast<int>(GD.global_vers.size());
-    const int B = static_cast<int>(GD.global_vers_cloud->points.size());
-    const int C = static_cast<int>(GD.global_adj.size());
-    const int D = static_cast<int>(GD.gskel_size);
-
-    const bool ok = (A == B) && (B == C) && (C == D);
+    const int B = static_cast<int>(GD.global_adj.size());
+    const int C = static_cast<int>(GD.gskel_size);
+    const bool ok = (A == B) && (B == C);
     return ok;
 }
 
