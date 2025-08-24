@@ -39,8 +39,10 @@ private:
     int height,
     float safety_distance,
     float resolution
-);
+  );
   
+  void erosion_filter(nav_msgs::msg::OccupancyGrid& local_map);
+
   std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
   nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);
   void extract_local_from_global(nav_msgs::msg::OccupancyGrid& local_map);

@@ -157,17 +157,45 @@ std::optional<geometry_msgs::msg::TransformStamped> ESDF2dCostMapNode::get_trans
 }
 
 void ESDF2dCostMapNode::extract_local_from_global(nav_msgs::msg::OccupancyGrid& local_map) {
-    for (int y = 0; y < local_grid_size_; ++y) {
-        for (int x = 0; x < local_grid_size_; ++x) {
-            int global_x = static_cast<int>((local_map.info.origin.position.x + x * resolution_ - global_map_.info.origin.position.x) / resolution_);
-            int global_y = static_cast<int>((local_map.info.origin.position.y + y * resolution_ - global_map_.info.origin.position.y) / resolution_);
-            int global_index = global_y * global_grid_size_ + global_x;
-            int local_index = y * local_grid_size_ + x;
-            if (global_x >= 0 && global_x < global_grid_size_ && global_y >= 0 && global_y < global_grid_size_) {
-                local_map.data[local_index] = global_map_.data[global_index];
+  for (int y = 0; y < local_grid_size_; ++y) {
+    for (int x = 0; x < local_grid_size_; ++x) {
+      int global_x = static_cast<int>((local_map.info.origin.position.x + x * resolution_ - global_map_.info.origin.position.x) / resolution_);
+      int global_y = static_cast<int>((local_map.info.origin.position.y + y * resolution_ - global_map_.info.origin.position.y) / resolution_);
+      int global_index = global_y * global_grid_size_ + global_x;
+      int local_index = y * local_grid_size_ + x;
+      if (global_x >= 0 && global_x < global_grid_size_ && global_y >= 0 && global_y < global_grid_size_) {
+          local_map.data[local_index] = global_map_.data[global_index];
+      }
+    }
+  }
+}
+// Erosion filter: eats away the outer layer of nonzero cells
+void ESDF2dCostMapNode::erosion_filter(nav_msgs::msg::OccupancyGrid& local_map) {
+    std::vector<int8_t> filtered = local_map.data;
+    for (int y = 1; y < local_grid_size_ - 1; ++y) {
+        for (int x = 1; x < local_grid_size_ - 1; ++x) {
+            int idx = y * local_grid_size_ + x;
+            if (local_map.data[idx] > 0) {
+                int zero_count = 0;
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        int nidx = (y + dy) * local_grid_size_ + (x + dx);
+                        if (local_map.data[nidx] == 0) {
+                            zero_count++;
+                        }
+                    }
+                }
+                if (zero_count >= 3) {
+                    if (local_map.data[idx] == 100) {
+                        filtered[idx] = 50;
+                    } else {
+                        filtered[idx] = 0;
+                    }
+                }
             }
         }
     }
+    local_map.data = std::move(filtered);
 }
 
 void ESDF2dCostMapNode::overwrite_local_with_esdf(
@@ -199,52 +227,52 @@ void ESDF2dCostMapNode::overwrite_local_with_esdf(
 }
 
 nav_msgs::msg::OccupancyGrid ESDF2dCostMapNode::create_local_map(const geometry_msgs::msg::TransformStamped& transform) {
-    nav_msgs::msg::OccupancyGrid local_map;
-    local_map.info.resolution = resolution_;
-    local_map.info.width = local_grid_size_;
-    local_map.info.height = local_grid_size_;
-    local_map.info.origin.position.x = std::floor((transform.transform.translation.x - local_half_size_ - global_map_.info.origin.position.x) / resolution_) * resolution_ + global_map_.info.origin.position.x;
-    local_map.info.origin.position.y = std::floor((transform.transform.translation.y - local_half_size_ - global_map_.info.origin.position.y) / resolution_) * resolution_ + global_map_.info.origin.position.y;
-    local_map.info.origin.position.z = 0.0;
-    local_map.info.origin.orientation.w = 1.0;
-    local_map.data.resize(local_grid_size_ * local_grid_size_, -1); // Initialize as unknown
-    return local_map;
+  nav_msgs::msg::OccupancyGrid local_map;
+  local_map.info.resolution = resolution_;
+  local_map.info.width = local_grid_size_;
+  local_map.info.height = local_grid_size_;
+  local_map.info.origin.position.x = std::floor((transform.transform.translation.x - local_half_size_ - global_map_.info.origin.position.x) / resolution_) * resolution_ + global_map_.info.origin.position.x;
+  local_map.info.origin.position.y = std::floor((transform.transform.translation.y - local_half_size_ - global_map_.info.origin.position.y) / resolution_) * resolution_ + global_map_.info.origin.position.y;
+  local_map.info.origin.position.z = 0.0;
+  local_map.info.origin.orientation.w = 1.0;
+  local_map.data.resize(local_grid_size_ * local_grid_size_, -1); // Initialize as unknown
+  return local_map;
 }
 
 void ESDF2dCostMapNode::clear_local_center(nav_msgs::msg::OccupancyGrid& local_map) {
-    double clear_radius = free_center_radius_; // Radius in meters
-    int clear_radius_cells = static_cast<int>(clear_radius / resolution_);
+  double clear_radius = free_center_radius_; // Radius in meters
+  int clear_radius_cells = static_cast<int>(clear_radius / resolution_);
 
-    // Calculate the center of the global map in the local map's coordinate system
-    int global_center_x = static_cast<int>((global_map_.info.origin.position.x + global_half_size_ - local_map.info.origin.position.x) / resolution_);
-    int global_center_y = static_cast<int>((global_map_.info.origin.position.y + global_half_size_ - local_map.info.origin.position.y) / resolution_);
+  // Calculate the center of the global map in the local map's coordinate system
+  int global_center_x = static_cast<int>((global_map_.info.origin.position.x + global_half_size_ - local_map.info.origin.position.x) / resolution_);
+  int global_center_y = static_cast<int>((global_map_.info.origin.position.y + global_half_size_ - local_map.info.origin.position.y) / resolution_);
 
-    for (int y = 0; y < local_grid_size_; ++y) {
-        for (int x = 0; x < local_grid_size_; ++x) {
-            int dx = x - global_center_x;
-            int dy = y - global_center_y;
-            if (dx * dx + dy * dy <= clear_radius_cells * clear_radius_cells) {
-                local_map.data[y * local_grid_size_ + x] = 0; // Clear cell
-            }
-        }
+  for (int y = 0; y < local_grid_size_; ++y) {
+    for (int x = 0; x < local_grid_size_; ++x) {
+      int dx = x - global_center_x;
+      int dy = y - global_center_y;
+      if (dx * dx + dy * dy <= clear_radius_cells * clear_radius_cells) {
+          local_map.data[y * local_grid_size_ + x] = 0; // Clear cell
+      }
     }
+  }
 }
 
 void ESDF2dCostMapNode::merge_local_to_global(const nav_msgs::msg::OccupancyGrid& local_map) {
-    for (int y = 0; y < local_grid_size_; ++y) {
-        for (int x = 0; x < local_grid_size_; ++x) {
-            int local_index = y * local_grid_size_ + x;
-            int global_x = static_cast<int>((local_map.info.origin.position.x + x * resolution_ - global_map_.info.origin.position.x) / resolution_);
-            int global_y = static_cast<int>((local_map.info.origin.position.y + y * resolution_ - global_map_.info.origin.position.y) / resolution_);
-            int global_index = global_y * global_grid_size_ + global_x;
+  for (int y = 0; y < local_grid_size_; ++y) {
+    for (int x = 0; x < local_grid_size_; ++x) {
+      int local_index = y * local_grid_size_ + x;
+      int global_x = static_cast<int>((local_map.info.origin.position.x + x * resolution_ - global_map_.info.origin.position.x) / resolution_);
+      int global_y = static_cast<int>((local_map.info.origin.position.y + y * resolution_ - global_map_.info.origin.position.y) / resolution_);
+      int global_index = global_y * global_grid_size_ + global_x;
 
-            if (global_x >= 0 && global_x < global_grid_size_ && global_y >= 0 && global_y < global_grid_size_) {
-                if (local_map.data[local_index] != -1) { // If the local cell is observed
-                    global_map_.data[global_index] = local_map.data[local_index];
-                }
-            }
+    if (global_x >= 0 && global_x < global_grid_size_ && global_y >= 0 && global_y < global_grid_size_) {
+        if (local_map.data[local_index] != -1) { // If the local cell is observed
+            global_map_.data[global_index] = local_map.data[local_index];
         }
+      }
     }
+  }
 }
 
 void ESDF2dCostMapNode::publish_maps(const nav_msgs::msg::OccupancyGrid& local_map) {
@@ -309,6 +337,7 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
 
   nav_msgs::msg::OccupancyGrid local_map = create_local_map(*transform);
   extract_local_from_global(local_map);
+  erosion_filter(local_map);
 
   std::vector<float> esdf_grid;
   std::vector<bool> esdf_mask;
@@ -322,11 +351,11 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
       local_map.info.origin.position.y,
       resolution_
   );
-  
-    // Only fill ESDF holes if there are more than 1000 points in the ESDF message
-    if (esdf_msg->width * esdf_msg->height > 1000) {
-        fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
-    }
+
+  // Only fill ESDF holes if there are more than 1000 points in the ESDF message
+  if (esdf_msg->width * esdf_msg->height > 1000) {
+      fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
+  }
 
   overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
   clear_local_center(local_map);
