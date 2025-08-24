@@ -320,7 +320,10 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
       resolution_
   );
   
-  fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
+    // Only fill ESDF holes if there are more than 1000 points in the ESDF message
+    if (esdf_msg->width * esdf_msg->height > 1000) {
+        fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
+    }
 
   overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
   clear_local_center(local_map);
