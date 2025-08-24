@@ -32,6 +32,14 @@ private:
     float origin_y,
     float resolution
   );
+  void fill_esdf_holes_wavefront(
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int width,
+    int height,
+    float safety_distance,
+    float resolution
+);
   
   std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
   nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);

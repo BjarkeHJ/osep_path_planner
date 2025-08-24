@@ -1,4 +1,7 @@
 #include "costmap_2d.hpp"
+#include <queue>
+#include <limits>
+#include <cmath>
 
 ESDF2dCostMapNode::ESDF2dCostMapNode()
 : Node("costmap_2d_node"),
@@ -93,6 +96,50 @@ void ESDF2dCostMapNode::convert_cloud_to_esdf_grid(
             int idx = grid_y * grid_width + grid_x;
             esdf_grid[idx] = point.intensity;
             esdf_mask[idx] = true;
+        }
+    }
+}
+
+void ESDF2dCostMapNode::fill_esdf_holes_wavefront(
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int width,
+    int height,
+    float safety_distance,
+    float resolution)
+{
+    struct Cell { int x, y; float value; };
+    std::queue<Cell> q;
+
+    // Initialize queue with all valid cells < safety_distance
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int idx = y * width + x;
+            if (esdf_mask[idx] && esdf_grid[idx] < safety_distance) {
+                q.push({x, y, esdf_grid[idx]});
+            }
+        }
+    }
+
+    int dx[4] = {1, -1, 0, 0};
+    int dy[4] = {0, 0, 1, -1};
+
+    while (!q.empty()) {
+        Cell cell = q.front(); q.pop();
+        for (int k = 0; k < 4; ++k) {
+            int nx = cell.x + dx[k];
+            int ny = cell.y + dy[k];
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                int nidx = ny * width + nx;
+                float new_val = std::min(cell.value + resolution, safety_distance);
+                if (!esdf_mask[nidx] || (esdf_grid[nidx] > new_val)) {
+                    esdf_grid[nidx] = new_val;
+                    esdf_mask[nidx] = true;
+                    if (new_val < safety_distance) {
+                        q.push({nx, ny, new_val});
+                    }
+                }
+            }
         }
     }
 }
