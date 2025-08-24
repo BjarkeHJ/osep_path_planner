@@ -46,7 +46,7 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
 
   // Subscribe to the ESDF point cloud topic
   esdf_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-    "/nvblox_node/static_esdf_pointcloud", 1,
+    "/nvblox_node/static_esdf_pointcloud", 10,
     std::bind(&ESDF2dCostMapNode::esdf_callback, this, std::placeholders::_1)
   );
 
