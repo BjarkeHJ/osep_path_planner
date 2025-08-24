@@ -43,7 +43,7 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
 
   // Subscribe to the ESDF point cloud topic
   esdf_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-    "/nvblox_node/static_esdf_pointcloud", 10,
+    "/nvblox_node/static_esdf_pointcloud", 1,
     std::bind(&ESDF2dCostMapNode::esdf_callback, this, std::placeholders::_1)
   );
 
@@ -52,6 +52,8 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
 
   // Publisher for the local cost map
   local_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(costmap_topic_, 10);
+
+  esdf_grid_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("osep/esdf_costmap", 10);
 
   RCLCPP_INFO(this->get_logger(), "ESDF cost map node initialized.");
 }
@@ -206,6 +208,37 @@ void ESDF2dCostMapNode::publish_maps(const nav_msgs::msg::OccupancyGrid& local_m
     global_map_pub_->publish(global_map_);
 }
 
+void ESDF2dCostMapNode::publish_esdf_grid_meters(
+    const std::vector<float>& esdf_grid,
+    const std::vector<bool>& esdf_mask,
+    const nav_msgs::msg::OccupancyGrid& local_map)
+{
+    nav_msgs::msg::OccupancyGrid esdf_msg = local_map;
+    esdf_msg.header.stamp = this->now();
+    esdf_msg.header.frame_id = "odom";
+    for (size_t i = 0; i < esdf_grid.size(); ++i) {
+        if (!esdf_mask[i] || std::isnan(esdf_grid[i])) {
+            esdf_msg.data[i] = -1; // unknown
+        } else {
+            float d = esdf_grid[i];
+            int val;
+            if (d < 0.0f) {
+                val = 100;
+            } else if (d < 5.0f) {
+                val = 100;
+            } else if (d < 10.0f) {
+                val = 50;
+            } else if (d < 15.0f) {
+                val = 25;
+            } else {
+                val = 0;
+            }
+            esdf_msg.data[i] = val;
+        }
+    }
+    esdf_grid_pub_->publish(esdf_msg);
+}
+
 void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg)
 {
   // Check for required fields before converting
@@ -238,6 +271,7 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
   merge_local_to_global(local_map);
 
   publish_maps(local_map);
+  publish_esdf_grid_meters(esdf_grid, esdf_mask, local_map);
 }
 
 int main(int argc, char ** argv)
