@@ -271,11 +271,11 @@ void ESDF2dCostMapNode::publish_esdf_grid_meters(
             int val;
             if (d < 0.0f) {
                 val = 100;
-            } else if (d < 5.0f) {
+            } else if (d <= 5.0f) {
                 val = 100;
-            } else if (d < 10.0f) {
+            } else if (d <= 10.0f) {
                 val = 50;
-            } else if (d < 15.0f) {
+            } else if (d <= 15.0f) {
                 val = 25;
             } else {
                 val = 0;
@@ -288,11 +288,18 @@ void ESDF2dCostMapNode::publish_esdf_grid_meters(
 
 void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg)
 {
-  // Check for required fields before converting
-  if (!validate_pointcloud2_fields(*esdf_msg)) {
-    RCLCPP_WARN(this->get_logger(), "PointCloud2 does not have expected fields!");
-    return;
-  }
+
+    // Check for required fields before converting
+    if (!validate_pointcloud2_fields(*esdf_msg)) {
+        RCLCPP_WARN(this->get_logger(), "PointCloud2 does not have expected fields!");
+        return;
+    }
+
+    // Return early if the ESDF cloud has 0 points
+    if (esdf_msg->width == 0 || esdf_msg->height == 0 || esdf_msg->data.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Received ESDF PointCloud2 with 0 points, skipping processing.");
+        return;
+    }
 
   auto transform = get_transform_to_odom();
   if (!transform) return;
@@ -312,6 +319,8 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
       local_map.info.origin.position.y,
       resolution_
   );
+  
+  fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
 
   overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
   clear_local_center(local_map);
