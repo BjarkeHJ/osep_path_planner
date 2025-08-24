@@ -56,38 +56,48 @@ ESDF2dCostMapNode::ESDF2dCostMapNode()
   RCLCPP_INFO(this->get_logger(), "ESDF cost map node initialized.");
 }
 
+bool ESDF2dCostMapNode::validate_pointcloud2_fields(const sensor_msgs::msg::PointCloud2& msg) {
+    return msg.fields.size() >= 4 &&
+           msg.fields[0].name == "x" &&
+           msg.fields[1].name == "y" &&
+           msg.fields[2].name == "z" &&
+           msg.fields[3].name == "intensity";
+}
+
+pcl::PointCloud<pcl::PointXYZI>::Ptr ESDF2dCostMapNode::convert_to_pcl_cloud(const sensor_msgs::msg::PointCloud2& msg) {
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::fromROSMsg(msg, *cloud);
+    return cloud;
+}
+
+std::optional<geometry_msgs::msg::TransformStamped> ESDF2dCostMapNode::get_transform_to_odom() {
+    try {
+        return tf_buffer_.lookupTransform("odom", frame_id_, rclcpp::Time(0));
+    } catch (tf2::TransformException &ex) {
+        RCLCPP_WARN(this->get_logger(), "Could not transform %s to odom: %s", frame_id_.c_str(), ex.what());
+        return std::nullopt;
+    }
+}
+
 void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg)
 {
   // Check for required fields before converting
-  if (esdf_msg->fields.size() < 4 ||
-      esdf_msg->fields[0].name != "x" ||
-      esdf_msg->fields[1].name != "y" ||
-      esdf_msg->fields[2].name != "z" ||
-      esdf_msg->fields[3].name != "intensity") {
-      RCLCPP_WARN(this->get_logger(), "PointCloud2 does not have expected fields!");
-      return;
-  }
-
-  // Convert the PointCloud2 message to a PCL point cloud
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
-  pcl::fromROSMsg(*esdf_msg, *cloud);
-
-  // Transform the base_link position into the global frame
-  geometry_msgs::msg::TransformStamped transform;
-  try {
-    transform = tf_buffer_.lookupTransform("odom", frame_id_, rclcpp::Time(0));
-  } catch (tf2::TransformException &ex) {
-    RCLCPP_WARN(this->get_logger(), "Could not transform %s to odom: %s", frame_id_.c_str(), ex.what());
+  if (!validate_pointcloud2_fields(*esdf_msg)) {
+    RCLCPP_WARN(this->get_logger(), "PointCloud2 does not have expected fields!");
     return;
   }
+
+  auto cloud = convert_to_pcl_cloud(*esdf_msg);
+
+  auto transform = get_transform_to_odom();
 
   // Create a local occupancy grid based on the global map
   nav_msgs::msg::OccupancyGrid local_map;
   local_map.info.resolution = resolution_;
   local_map.info.width = local_grid_size_;
   local_map.info.height = local_grid_size_;
-  local_map.info.origin.position.x = std::floor((transform.transform.translation.x - local_half_size_ - global_map_.info.origin.position.x) / resolution_) * resolution_ + global_map_.info.origin.position.x;
-  local_map.info.origin.position.y = std::floor((transform.transform.translation.y - local_half_size_ - global_map_.info.origin.position.y) / resolution_) * resolution_ + global_map_.info.origin.position.y;
+  local_map.info.origin.position.x = std::floor((transform->transform.translation.x - local_half_size_ - global_map_.info.origin.position.x) / resolution_) * resolution_ + global_map_.info.origin.position.x;
+  local_map.info.origin.position.y = std::floor((transform->transform.translation.y - local_half_size_ - global_map_.info.origin.position.y) / resolution_) * resolution_ + global_map_.info.origin.position.y;
   local_map.info.origin.position.z = 0.0;
   local_map.info.origin.orientation.w = 1.0;
   local_map.data.resize(local_grid_size_ * local_grid_size_, -1); // Initialize as unknown
@@ -117,7 +127,7 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
 
       if (distance < 0.0f) {
         // Inside an obstacle or invalid value
-        cost = 110; // Maximum cost for obstacle
+        cost = 100; // Maximum cost for obstacle
       } else if (distance <= safety_distance_min_) {
         // Within minimum safety distance
         cost = 100; // Maximum cost (unsafe region)
@@ -131,8 +141,8 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
         cost = 0; // No cost (safe region)
       }
 
-      // Ensure cost stays within the range [0, 110]
-      cost = std::clamp(cost, 0, 110);
+      // Ensure cost stays within the range [0, 100]
+      cost = std::clamp(cost, 0, 100);
 
       local_map.data[grid_y * local_grid_size_ + grid_x] = cost;
     }

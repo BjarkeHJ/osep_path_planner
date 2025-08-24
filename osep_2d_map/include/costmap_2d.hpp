@@ -11,6 +11,8 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <algorithm>
+#include <optional>
+
 
 class ESDF2dCostMapNode : public rclcpp::Node {
 public:
@@ -18,6 +20,13 @@ public:
   ESDF2dCostMapNode();
 
 private:
+  // Functions
+  bool validate_pointcloud2_fields(const sensor_msgs::msg::PointCloud2& msg);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr convert_to_pcl_cloud(const sensor_msgs::msg::PointCloud2& msg);
+  std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
+
+
+
   // --- Callback Methods ---
   void esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg);
 
