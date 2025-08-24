@@ -10,6 +10,7 @@ ROS2 Node for Viewpoint managing
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
 
 #include "osep_skeleton_decomp/msg/vertex.hpp"
 #include "osep_skeleton_decomp/msg/global_skeleton.hpp"
@@ -28,12 +29,14 @@ private:
 
     /* ROS2 */
     rclcpp::Subscription<MsgSkeleton>::SharedPtr skel_sub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr vp_pub;
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr vp_pub_;
     rclcpp::TimerBase::SharedPtr tick_timer_;
 
     /* Params */
     std::string skel_topic_;
     std::string vp_topic_;
+    std::string costmap_topic_;
     std::string global_frame_id_;
     int tick_ms_;
 
@@ -50,6 +53,7 @@ ViewpointNode::ViewpointNode() : Node("ViewpointManagerNode") {
     /* LAUNCH FILE PARAMETER DECLARATIONS */
     // MISC
     skel_topic_ = declare_parameter<std::string>("skeleton_topic", "/osep/gskel/global_skeleton_vertices");
+    costmap_topic_ = declare_parameter<std::string>("costmap_topic", "/osep/local_costmap/costmap");
     vp_topic_ = declare_parameter<std::string>("viewpoint_topic", "/osep/viewpoint_manager/viewpoints");
     tick_ms_ = declare_parameter<int>("tick_ms", 50);
     global_frame_id_ = declare_parameter<std::string>("global_frame_id", "odom");

@@ -31,7 +31,7 @@ bool GSkel::gskel_run() {
     RUN_STEP(vertex_merge);
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
-    RUN_STEP(extract_branches);
+    RUN_STEP(update_branches);
     RUN_STEP(vid_manager);
 
     // auto te = std::chrono::high_resolution_clock::now();
@@ -266,7 +266,7 @@ bool GSkel::mst() {
     }
 
     GD.global_adj = std::move(mst_adj);
-    graph_decomp();
+    // graph_decomp();
     return size_assert();
 }
 
@@ -275,9 +275,9 @@ bool GSkel::vertex_merge() {
     if (GD.gskel_size == 0 || N_new == 0) return 0;
     if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
 
-    auto is_joint = [&](int idx) {
-        return std::find(GD.joints.begin(), GD.joints.end(), idx) != GD.joints.end();
-    };
+    // auto is_joint = [&](int idx) {
+    //     return std::find(GD.joints.begin(), GD.joints.end(), idx) != GD.joints.end();
+    // };
 
     std::set<int> to_delete;
 
@@ -291,9 +291,10 @@ bool GSkel::vertex_merge() {
             if (new_id == nb_id || to_delete.count(nb_id)) continue;
 
             bool do_merge = false;
-            if (is_joint(new_id) && is_joint(nb_id)) {
+            // if (is_joint(new_id) && is_joint(nb_id)) {
+            if (GD.global_adj[new_id].size() > 2 && GD.global_adj[nb_id].size() > 2) {
                 do_merge = true;
-                GD.joints.erase(std::remove(GD.joints.begin(), GD.joints.end(), nb_id), GD.joints.end());
+                // GD.joints.erase(std::remove(GD.joints.begin(), GD.joints.end(), nb_id), GD.joints.end());
             }
 
             const auto &Vi = GD.global_vers[new_id];
@@ -338,7 +339,7 @@ bool GSkel::vertex_merge() {
     }
 
     GD.gskel_size = GD.global_vers.size();
-    graph_decomp();
+    // graph_decomp();
     return size_assert();
 }
 
@@ -347,19 +348,30 @@ bool GSkel::prune() {
     if (GD.gskel_size == 0 || N_new == 0) return 0;
     if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
 
-    std::set<int> joint_set(GD.joints.begin(), GD.joints.end());
-    std::set<int> new_set(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end());
+    // std::set<int> joint_set(GD.joints.begin(), GD.joints.end());
+    // std::set<int> new_set(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end());
     std::vector<int> to_delete;
 
-    for (int leaf : GD.leafs) {
-        if (!new_set.count(leaf)) continue; // not a new leaf
-        if (GD.global_adj[leaf].size() != 1) continue; // sanity check...
-
-        int nb = GD.global_adj[leaf][0];
-        if (joint_set.count(nb)) {
-            to_delete.push_back(leaf);
+    for (int v : GD.new_vers_indxs) {
+        if (v < 0 || v >= static_cast<int>(GD.global_adj.size())) continue;
+        if (GD.global_adj[v].size() != 1) continue; // not a leaf
+        int nb = GD.global_adj[v][0];
+        if (GD.global_adj[nb].size() >= 3) {
+            to_delete.push_back(v);
         }
     }
+
+    if (to_delete.empty()) return 1; // exit w. success
+
+    // for (int leaf : GD.leafs) {
+    //     if (!new_set.count(leaf)) continue; // not a new leaf
+    //     if (GD.global_adj[leaf].size() != 1) continue; // sanity check...
+
+    //     int nb = GD.global_adj[leaf][0];
+    //     if (joint_set.count(nb)) {
+    //         to_delete.push_back(leaf);
+    //     }
+    // }
 
     std::sort(to_delete.rbegin(), to_delete.rend());
     for (int idx : to_delete) {
@@ -378,7 +390,7 @@ bool GSkel::prune() {
         }
     }
     GD.gskel_size = GD.global_vers.size();
-    graph_decomp();
+    // graph_decomp();
     return 1;
 }
 
@@ -418,105 +430,187 @@ bool GSkel::smooth_vertex_positions() {
     return 1;
 }
 
-bool GSkel::extract_branches() {
+bool GSkel::update_branches() {
     if (GD.gskel_size == 0) return 0;
-    GD.branches.clear();
+    graph_decomp(); // assign vertex types (GD:joints, GD.leafs)
+    
+    auto& V = GD.global_vers;
+    auto& adj = GD.global_adj;
+    auto& BR = GD.branches;
 
-    std::set<std::pair<int,int>> visited_edges;
-
-    auto is_endpoint = [&](int vidx) {
-        return GD.global_vers[vidx].type == 1 || GD.global_vers[vidx].type == 3;
-    };
-
-    for (int endp : GD.leafs) {
-        for (int nb : GD.global_adj[endp]) {
-            if (endp > nb) std::swap(endp, nb); // interpret edge ab and ba the same
-            if (visited_edges.count({endp, nb})) continue;
-
-            std::vector<int> branch;
-            branch.push_back(endp);
-
-            int prev = endp;
-            int curr = nb;
-
-            while (true) {
-                branch.push_back(curr);
-                if (is_endpoint(curr) && curr != endp) break; // stop at a different endpoint
-                int next = -1;
-
-                for (int nn : GD.global_adj[curr]) {
-                    if (nn != prev) {
-                        next = nn; // choose one nb
-                        break;
-                    }
+    // Drop empty branches...
+    {
+        std::vector<int> remap(BR.size(), -1);
+        std::vector<std::vector<int>> compact;
+        for (int b=0; b<(int)BR.size(); ++b) {
+            if (!BR[b].empty()) {
+                remap[b] = (int)compact.size();
+                compact.push_back(std::move(BR[b]));
+            }
+        }
+        if ((int)compact.size() != (int)BR.size()) {
+            BR.swap(compact);
+            for (auto& vx : GD.global_vers) {
+                vx.bid = -1;
+                vx.bpos = -1;
+            }
+            for (int b=0; b<(int)BR.size(); ++b) {
+                for (int i=0; i<(int)BR[b].size(); ++i) {
+                    int v = BR[b][i];
+                    V[v].bid = b;
+                    V[v].bpos = i;
                 }
-
-                if (next == -1) break; // dead end
-                prev = curr;
-                curr = next;
             }
-
-            for (size_t i=1; i<branch.size(); ++i) {
-                std::pair<int,int> edge{branch[i-1], branch[i]};
-                visited_edges.insert(edge);
-            }
-            GD.branches.push_back(branch);
         }
     }
 
-    // Repeat for joints...
-    for (int endp : GD.joints) {
-        for (int nb : GD.global_adj[endp]) {
-            if (endp > nb) std::swap(endp, nb);
-            if (visited_edges.count({endp, nb}));
+    // Attach new vertices
+    for (int v : GD.new_vers_indxs) {
+        if (v < 0 || v >= (int)V.size()) continue;
+        if (V[v].bid != -1) continue; // already assigned somehow...
 
-            std::vector<int> branch;
-            branch.push_back(endp);
+        int nb_in_branch = 0;
+        int bid_hit = -1;
+        int pos_left = -1;
+        int pos_right = -1;
 
-            int prev = endp;
-            int curr = nb;
-
-            while (true) {
-                branch.push_back(curr);
-                if (is_endpoint(curr) && curr != endp) break;
-
-                int next = -1;
-                for (int nn : GD.global_adj[curr]) {
-                    if (nn != prev) {
-                        next = nn;
-                        break;
-                    }
+        // Count adjacent nbs that already have a branch 
+        for (int nb : adj[v]) {
+            if (nb < 0 || nb >= (int)V.size()) continue;
+            if (V[nb].bid != -1) {
+                nb_in_branch++;
+                bid_hit = V[nb].bid;
+                if (pos_left == -1) {
+                    pos_left = V[nb].bpos;
                 }
+                else {
+                    pos_right = V[nb].bpos;
+                }
+            } 
+        }
 
-                if (next == -1) break;
-                prev = curr;
-                curr = next;
-            }
+        if (nb_in_branch == 0) continue; // not enough info
+        if (bid_hit < 0 || bid_hit >= (int)BR.size()) continue;
 
-            for (size_t i=1; i<branch.size(); ++i) {
-                std::pair<int,int> edge{branch[i-1], branch[i]};
-                visited_edges.insert(edge);
+        auto& br = BR[bid_hit];
+        if (br.empty()) continue;
+
+        if (nb_in_branch == 1) {
+            // likely an extension to an endpoint (new leaf)
+            int front = br.front();
+            // int back = br.back();
+            bool touches_front = std::find(adj[front].begin(), adj[front].end(), v) != adj[front].end();
+            int side = touches_front ? -1 : +1;
+            extend_branch(bid_hit, side, std::vector<int>{v});
+        }
+        else {
+            // two nbs in the same branch -> v lies between them -> splice between indices
+            if (pos_left < 0 || pos_right < 0) continue;
+            int i0 = std::min(pos_left, pos_right);
+            br.insert(br.begin() + (i0+1), v);
+            for (int i=i0; i<(int)br.size(); ++i) {
+                int vv = br[i];
+                V[vv].bid = bid_hit;
+                V[vv].bpos = i;
             }
-            GD.branches.push_back(branch);
         }
     }
 
-    std::sort(GD.branches.begin(), GD.branches.end(),
-        [](const std::vector<int> &a, const std::vector<int> &b) {
-            return a.size() < b.size();
-        }
-    );
+    // Start/repair branches from unassigned endpoints
+    std::vector<int> endpts;
+    endpts.reserve(GD.joints.size() + GD.leafs.size());
+    endpts.insert(endpts.end(), GD.leafs.begin(), GD.leafs.end());
+    endpts.insert(endpts.end(), GD.joints.begin(), GD.joints.end());
+    std::sort(endpts.begin(), endpts.end());
+    // endpts.erase(std::unique(endpts.begin(), endpts.end()), endpts.end());
+    
+    for (int s : endpts) {
+        if (s < 0 || s >= (int)V.size()) continue;
+        if (V[s].bid != -1) continue;
 
-    const size_t min_bl = cfg_.min_branch_length;
-    GD.branches.erase(
-        std::remove_if(
-            GD.branches.begin(), GD.branches.end(),
-            [min_bl](const std::vector<int>& branch) {
-                return branch.size() < min_bl;
+        int first_nb = -1;
+        for (int nb : adj[s]) {
+
+            first_nb = nb;
+            if (V[nb].bid == -1) break;
+        }
+        if (first_nb < 0) continue;
+
+        std::vector<int> path;
+        path.push_back(s);
+
+        int prev = s;
+        int curr = first_nb;
+        int hit_bid = -1;
+        while (true) {
+            path.push_back(curr);
+            if (V[curr].bid != -1) {
+                hit_bid = V[curr].bid;
+                break; // hit existing branch
             }
-        ),
-        GD.branches.end()
-    );
+
+            if (is_endpoint(V[curr]) && curr != s) {
+                break; // hit another endpoint
+            }
+
+            int nxt = -1;
+            for (int nn : adj[curr]) {
+                if (nn != prev) {
+                    nxt = nn;
+                    break; // found new in chain
+                }
+            }
+        
+            if (nxt < 0) break; // unable to find new in chain... -> break loop
+
+            prev = curr;
+            curr = nxt;
+        }
+
+        if (path.size() < 2) continue;
+
+        if (hit_bid == -1) {
+            // ended on a fresh endpoint -> new branch!
+            (void)add_branch(path);
+        }
+        else {
+            // connected to existing branch at 'curr'
+            auto& br = BR[hit_bid];
+            if (br.empty()) continue;
+            int front = br.front();
+            int back = br.back();
+            int side = (+1); // default to back
+            if (curr == front) side = -1; // hit the front
+            else if (curr == back) side = +1; // hit the back
+            else {
+                // hit interior of branch -> split and insert in the left part
+                int ip = V[curr].bpos;
+                std::vector<int> left(br.begin(), br.begin()+ip+1);
+                std::vector<int> right(br.begin()+ip, br.end());
+
+                br = std::move(left);
+                for (int i=0; i<(int)br.size(); ++i) {
+                    int vv = br[i];
+                    V[vv].bid = hit_bid;
+                    V[vv].bpos = i;
+                }
+
+                if (right.size() >= 2) {
+                    // int bid2 = add_branch(right);
+                    (void)add_branch(right); // add branch from the right part
+                }
+
+                side = +1;
+            }
+
+            if (!path.empty() && path.back() == curr) {
+                path.pop_back();
+            }
+
+            extend_branch(hit_bid, side, path);
+        }
+    }
+
     return 1;
 }
 
@@ -549,7 +643,6 @@ void GSkel::build_cloud_from_vertices() {
     for (const auto& v : GD.global_vers) {
         if (!pcl::isFinite(v.position)) {
             std::cout << "INVALID POSITION!!" << std::endl;
-            continue;
         }
         GD.global_vers_cloud->points.push_back(v.position);
     }
@@ -581,6 +674,7 @@ void GSkel::graph_decomp() {
             break;
         case 2:
             v_type = 2;
+            break;
         default:
             if (degree > 2) {
                 GD.joints.push_back(i);
@@ -627,3 +721,191 @@ bool GSkel::size_assert() {
     return ok;
 }
 
+bool GSkel::is_endpoint(const Vertex& v) {
+    return (v.type == 1 || v.type == 3);
+}
+
+int GSkel::add_branch(const std::vector<int>& chain) {
+    if (chain.size() < 2) return -1; // replace with max_branch_size???
+    int bid = (int)GD.branches.size();
+    GD.branches.push_back(chain);
+    for (int i=0; i<(int)chain.size(); ++i) {
+        int v = chain[i];
+        GD.global_vers[v].bid = bid; // set vertex branch id
+        GD.global_vers[v].bpos = i; // ser branch position id
+    }
+    return bid;
+}
+
+void GSkel::extend_branch(int bid, int side, const std::vector<int>& extra) {
+    // Insert a small sequence at a branch end (front/back)
+    // side: -1 = front, +1 = back
+    if (extra.empty()) return;
+    auto& br = GD.branches[bid];
+
+    if (side < 0) {
+        // insert at front, keep order
+        br.insert(br.begin(), extra.begin(), extra.end());
+        // reindex
+        for (int i=0; i<(int)br.size(); ++i) {
+            int v = br[i];
+            GD.global_vers[v].bid = bid;
+            GD.global_vers[v].bpos = i;
+        }
+    }
+    else {
+        // append at back
+        int start = (int)br.size();
+        br.insert(br.end(), extra.begin(), extra.end());
+        for (int i=start; i<(int)br.size(); ++i) {
+            int v = br[i];
+            GD.global_vers[v].bid = bid;
+            GD.global_vers[v].bpos = i;
+        }
+    }
+}
+
+void GSkel::merge_branch(int bidA, int A_end, std::vector<int> mid, int bidB, int B_end) {
+    // If two branches are connected by 'mid' sequence, merge them into A
+    // A_end = -1 front, +1 back
+    // B_end = -1 front, +1 back
+    if (bidA == bidB) return;
+    auto& A = GD.branches[bidA];
+    auto& B = GD.branches[bidB];
+    if (A.empty() || B.empty()) return;
+
+    if (A_end < 0) {
+        A.insert(A.begin(), mid.begin(), mid.end());
+        if (B_end < 0) std::reverse(B.begin(), B.end());
+        A.insert(A.end(), B.begin(), B.end());
+    }
+    else {
+        if (B_end > 0) std::reverse(B.begin(), B.end());
+        A.insert(A.end(), mid.begin(), mid.end());
+        A.insert(A.end(), B.begin(), B.end());
+    }
+
+    // reindex A
+    for (int i=0; i<(int)A.size(); ++i) {
+        int v = A[i];
+        GD.global_vers[v].bid = bidA;
+        GD.global_vers[v].bpos = i;
+    }
+
+    // invalidate B
+    B.clear();
+    for (auto& vv : GD.global_vers) {
+        if (vv.bid == bidB) {
+            vv.bid = -1;
+            vv.bpos = -1;
+        }
+    }
+
+}
+
+
+
+
+
+
+// bool GSkel::extract_branches() {
+//     if (GD.gskel_size == 0) return 0;
+//     GD.branches.clear();
+
+//     std::set<std::pair<int,int>> visited_edges;
+
+//     auto is_endpoint = [&](int vidx) {
+//         return GD.global_vers[vidx].type == 1 || GD.global_vers[vidx].type == 3;
+//     };
+
+//     for (int endp : GD.leafs) {
+//         for (int nb : GD.global_adj[endp]) {
+//             if (endp > nb) std::swap(endp, nb); // interpret edge ab and ba the same
+//             if (visited_edges.count({endp, nb})) continue;
+
+//             std::vector<int> branch;
+//             branch.push_back(endp);
+
+//             int prev = endp;
+//             int curr = nb;
+
+//             while (true) {
+//                 branch.push_back(curr);
+//                 if (is_endpoint(curr) && curr != endp) break; // stop at a different endpoint
+//                 int next = -1;
+
+//                 for (int nn : GD.global_adj[curr]) {
+//                     if (nn != prev) {
+//                         next = nn; // choose one nb
+//                         break;
+//                     }
+//                 }
+
+//                 if (next == -1) break; // dead end
+//                 prev = curr;
+//                 curr = next;
+//             }
+
+//             for (size_t i=1; i<branch.size(); ++i) {
+//                 std::pair<int,int> edge{branch[i-1], branch[i]};
+//                 visited_edges.insert(edge);
+//             }
+//             GD.branches.push_back(branch);
+//         }
+//     }
+
+//     // Repeat for joints...
+//     for (int endp : GD.joints) {
+//         for (int nb : GD.global_adj[endp]) {
+//             if (endp > nb) std::swap(endp, nb);
+//             if (visited_edges.count({endp, nb}));
+
+//             std::vector<int> branch;
+//             branch.push_back(endp);
+
+//             int prev = endp;
+//             int curr = nb;
+
+//             while (true) {
+//                 branch.push_back(curr);
+//                 if (is_endpoint(curr) && curr != endp) break;
+
+//                 int next = -1;
+//                 for (int nn : GD.global_adj[curr]) {
+//                     if (nn != prev) {
+//                         next = nn;
+//                         break;
+//                     }
+//                 }
+
+//                 if (next == -1) break;
+//                 prev = curr;
+//                 curr = next;
+//             }
+
+//             for (size_t i=1; i<branch.size(); ++i) {
+//                 std::pair<int,int> edge{branch[i-1], branch[i]};
+//                 visited_edges.insert(edge);
+//             }
+//             GD.branches.push_back(branch);
+//         }
+//     }
+
+//     std::sort(GD.branches.begin(), GD.branches.end(),
+//         [](const std::vector<int> &a, const std::vector<int> &b) {
+//             return a.size() < b.size();
+//         }
+//     );
+
+//     const size_t min_bl = cfg_.min_branch_length;
+//     GD.branches.erase(
+//         std::remove_if(
+//             GD.branches.begin(), GD.branches.end(),
+//             [min_bl](const std::vector<int>& branch) {
+//                 return branch.size() < min_bl;
+//             }
+//         ),
+//         GD.branches.end()
+//     );
+//     return 1;
+// }

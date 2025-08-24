@@ -75,6 +75,9 @@ struct Vertex {
     pcl::PointXYZ position;
     VertexLKF kf;
 
+    int bid = -1; // global branch id
+    int bpos = -1; // branch position id
+
     int obs_coubt = 0;
     int unconf_check = 0;
     int type = 0;
@@ -94,8 +97,9 @@ struct GSkelData {
     std::vector<Vertex> global_vers;
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_vers_cloud;
     std::vector<int> new_vers_indxs;
-    
 
+    std::vector<Vertex> reduced_gskel;
+    
     std::vector<int> joints;
     std::vector<int> leafs;
     std::vector<std::vector<int>> branches;
@@ -123,14 +127,21 @@ private:
     bool vertex_merge();
     bool prune();
     bool smooth_vertex_positions();
-    bool extract_branches();
+    bool update_branches();
     bool vid_manager();
+    
+    
+    // bool extract_branches();
 
     /* Helper */
     void build_cloud_from_vertices();
     void graph_decomp();
     void merge_into(int keep, int del);
     bool size_assert();
+    bool is_endpoint(const Vertex& v);
+    int add_branch(const std::vector<int>& chain);
+    void extend_branch(int bid, int side, const std::vector<int>& extra);
+    void merge_branch(int bidA, int A_end, std::vector<int> mid, int bidB, int B_end);
 
     /* Params */
     GSkelConfig cfg_;

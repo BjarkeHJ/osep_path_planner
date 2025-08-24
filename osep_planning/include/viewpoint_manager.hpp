@@ -41,6 +41,7 @@ struct ViewpointData {
     size_t gskel_size;
     std::vector<Vertex> global_skel;
     std::vector<Viewpoint> global_vpts;
+    std::vector<int> updated_vertices;
 };    
 
 
@@ -57,7 +58,9 @@ private:
     bool viewpoint_visibility_graph();
 
     /* Helper */
+    void fetch_updated_vertices();
     std::vector<Viewpoint> generate_viewpoint(int id);
+
 
     /* Params */
     ViewpointConfig cfg_;
