@@ -117,7 +117,7 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
 
       if (distance < 0.0f) {
         // Inside an obstacle or invalid value
-        cost = 100; // Maximum cost for obstacle
+        cost = 110; // Maximum cost for obstacle
       } else if (distance <= safety_distance_min_) {
         // Within minimum safety distance
         cost = 100; // Maximum cost (unsafe region)
@@ -131,8 +131,8 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
         cost = 0; // No cost (safe region)
       }
 
-      // Ensure cost stays within the range [0, 100]
-      cost = std::clamp(cost, 0, 100);
+      // Ensure cost stays within the range [0, 110]
+      cost = std::clamp(cost, 0, 110);
 
       local_map.data[grid_y * local_grid_size_ + grid_x] = cost;
     }
