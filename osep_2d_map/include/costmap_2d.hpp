@@ -24,6 +24,7 @@ private:
   bool validate_pointcloud2_fields(const sensor_msgs::msg::PointCloud2& msg);
   pcl::PointCloud<pcl::PointXYZI>::Ptr convert_to_pcl_cloud(const sensor_msgs::msg::PointCloud2& msg);
   std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
+  nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);
 
 
 

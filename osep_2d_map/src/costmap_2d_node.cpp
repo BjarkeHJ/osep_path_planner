@@ -79,6 +79,19 @@ std::optional<geometry_msgs::msg::TransformStamped> ESDF2dCostMapNode::get_trans
     }
 }
 
+nav_msgs::msg::OccupancyGrid ESDF2dCostMapNode::create_local_map(const geometry_msgs::msg::TransformStamped& transform) {
+    nav_msgs::msg::OccupancyGrid local_map;
+    local_map.info.resolution = resolution_;
+    local_map.info.width = local_grid_size_;
+    local_map.info.height = local_grid_size_;
+    local_map.info.origin.position.x = std::floor((transform.transform.translation.x - local_half_size_ - global_map_.info.origin.position.x) / resolution_) * resolution_ + global_map_.info.origin.position.x;
+    local_map.info.origin.position.y = std::floor((transform.transform.translation.y - local_half_size_ - global_map_.info.origin.position.y) / resolution_) * resolution_ + global_map_.info.origin.position.y;
+    local_map.info.origin.position.z = 0.0;
+    local_map.info.origin.orientation.w = 1.0;
+    local_map.data.resize(local_grid_size_ * local_grid_size_, -1); // Initialize as unknown
+    return local_map;
+}
+
 void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg)
 {
   // Check for required fields before converting
@@ -90,6 +103,8 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
   auto cloud = convert_to_pcl_cloud(*esdf_msg);
 
   auto transform = get_transform_to_odom();
+  if (!transform) return;
+
 
   // Create a local occupancy grid based on the global map
   nav_msgs::msg::OccupancyGrid local_map;
