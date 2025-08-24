@@ -31,7 +31,7 @@ bool GSkel::gskel_run() {
     RUN_STEP(vertex_merge);
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
-    RUN_STEP(update_branches);
+    RUN_STEP(extract_branches);
 
     std::cout << "Number of branches: " << GD.branches.size() << std::endl;
     for (int i=0; i<(int)GD.branches.size(); ++i) {
@@ -437,180 +437,77 @@ bool GSkel::smooth_vertex_positions() {
     return 1;
 }
 
-bool GSkel::update_branches() {
-    if (GD.gskel_size == 0) return 0;
-    graph_decomp(); // assign vertex types (GD:joints, GD.leafs)
-    
-    auto& V = GD.global_vers;
-    auto& adj = GD.global_adj;
-    auto& BR = GD.branches;
+bool GSkel::extract_branches() {
+    const int min_branch_l = 1;
+    const int N = static_cast<int>(GD.global_vers.size());
+    if (N == 0) return 0;
 
-    // Drop empty branches...
-   {
-    std::vector<std::vector<int>> compact;
-    compact.reserve(BR.size());
-    for (auto &b : BR) {
-        if (!b.empty()) compact.push_back(std::move(b)); // move OK
-    }
-    BR.swap(compact); // <-- ALWAYS swap
+    GD.branches.clear();
+    GD.branches.shrink_to_fit();
 
-    // rebuild bid/bpos since indices may have changed
-    for (auto& vx : GD.global_vers) { vx.bid = -1; vx.bpos = -1; }
-    for (int b = 0; b < (int)BR.size(); ++b)
-        for (int i = 0; i < (int)BR[b].size(); ++i) {
-            int v = BR[b][i];
-            GD.global_vers[v].bid  = b;
-            GD.global_vers[v].bpos = i;
-        }
-    }
+    graph_decomp();
 
-    // Attach new vertices
-    for (int v : GD.new_vers_indxs) {
-        if (v < 0 || v >= (int)V.size()) continue;
-        if (V[v].bid != -1) continue; // already assigned somehow...
+    auto is_endpoint = [&](const Vertex& v) -> bool {
+        return v.type == 1 || v.type == 3; // leaf or joint
+    };
 
-        int nb_in_branch = 0;
-        int bid_hit = -1;
-        int pos_left = -1;
-        int pos_right = -1;
+    auto edge_key = [](int u, int v) -> uint64_t {
+        if (u > v) std::swap(u,v);
+        return (static_cast<uint64_t>(u) << 32) | static_cast<uint32_t>(v);
+    };
 
-        // Count adjacent nbs that already have a branch 
-        for (int nb : adj[v]) {
-            if (nb < 0 || nb >= (int)V.size()) continue;
-            if (V[nb].bid != -1) {
-                nb_in_branch++;
-                bid_hit = V[nb].bid;
-                if (pos_left == -1) {
-                    pos_left = V[nb].bpos;
-                }
-                else {
-                    pos_right = V[nb].bpos;
-                }
-            } 
-        }
+    std::unordered_set<uint64_t> visited; 
+    visited.reserve(2u * N);
 
-        if (nb_in_branch == 0) continue; // not enough info
-        if (bid_hit < 0 || bid_hit >= (int)BR.size()) continue;
+    auto mark_edge = [&](int u, int v) {
+        visited.insert(edge_key(u, v));
+    };
 
-        auto& br = BR[bid_hit];
-        if (br.empty()) continue;
+    auto edge_seen = [&](int u, int v) -> bool {
+        return visited.find(edge_key(u, v)) != visited.end();
+    };
 
-        if (nb_in_branch == 1) {
-            // likely an extension to an endpoint (new leaf)
-            int front = br.front();
-            // int back = br.back();
-            bool touches_front = std::find(adj[front].begin(), adj[front].end(), v) != adj[front].end();
-            int side = touches_front ? -1 : +1;
-            extend_branch(bid_hit, side, std::vector<int>{v});
-        }
-        else {
-            // two nbs in the same branch -> v lies between them -> splice between indices
-            if (pos_left < 0 || pos_right < 0) continue;
-            int i0 = std::min(pos_left, pos_right);
-            br.insert(br.begin() + (i0+1), v);
-            for (int i=i0; i<(int)br.size(); ++i) {
-                int vv = br[i];
-                V[vv].bid = bid_hit;
-                V[vv].bpos = i;
-            }
-        }
-    }
+    auto walk_branch = [&](int start, int nb) -> std::vector<int> {
+        std::vector<int> branch;
+        branch.reserve(32);
+        int prev = start;
+        int curr = nb;
+        branch.push_back(start);
 
-    // Start/repair branches from unassigned endpoints
-    std::vector<int> endpts;
-    endpts.reserve(GD.joints.size() + GD.leafs.size());
-    endpts.insert(endpts.end(), GD.leafs.begin(), GD.leafs.end());
-    endpts.insert(endpts.end(), GD.joints.begin(), GD.joints.end());
-    std::sort(endpts.begin(), endpts.end());
-    // endpts.erase(std::unique(endpts.begin(), endpts.end()), endpts.end());
-    
-    for (int s : endpts) {
-        if (s < 0 || s >= (int)V.size()) continue;
-        if (V[s].bid != -1) continue;
-
-        int first_nb = -1;
-        for (int nb : adj[s]) {
-
-            first_nb = nb;
-            if (V[nb].bid == -1) break;
-        }
-        if (first_nb < 0) continue;
-
-        std::vector<int> path;
-        path.push_back(s);
-
-        int prev = s;
-        int curr = first_nb;
-        int hit_bid = -1;
         while (true) {
-            path.push_back(curr);
-            if (V[curr].bid != -1) {
-                hit_bid = V[curr].bid;
-                break; // hit existing branch
-            }
+            branch.push_back(curr);
+            mark_edge(prev, curr);
 
-            if (is_endpoint(V[curr]) && curr != s) {
-                break; // hit another endpoint
-            }
+            // Stop if we hit another endpoint (different from start)
+            if (is_endpoint(GD.global_vers[curr]) && curr != start) break;
 
-            int nxt = -1;
-            for (int nn : adj[curr]) {
-                if (nn != prev) {
-                    nxt = nn;
-                    break; // found new in chain
+            // Choose the next neighbor that's not 'prev'
+            int next = -1;
+            for (int w : GD.global_adj[curr]) {
+                if (w != prev) {
+                    // If this edge is already walked, skip it
+                    if (!edge_seen(curr, w)) { next = w; break; }
                 }
             }
-        
-            if (nxt < 0) break; // unable to find new in chain... -> break loop
+            if (next == -1) break; // dead end or all outgoing edges consumed
 
             prev = curr;
-            curr = nxt;
+            curr = next;
         }
+        return branch;
+    };
 
-        if (path.size() < 2) continue;
-
-        if (hit_bid == -1) {
-            // ended on a fresh endpoint -> new branch!
-            (void)add_branch(path);
-        }
-        else {
-            // hit existing branch at 'curr'
-            auto& br = BR[hit_bid];
-            if (br.empty()) continue;
-            int front = br.front();
-            int back = br.back();
-            int side = (+1); // default to back
-            if (curr == front) side = -1; // hit the front
-            else if (curr == back) side = +1; // hit the back
-            else {
-                // hit interior of branch -> split and insert in the left part
-                int ip = V[curr].bpos;
-                std::vector<int> left(br.begin(), br.begin()+ip+1);
-                std::vector<int> right(br.begin()+ip, br.end());
-
-                br = std::move(left);
-                for (int i=0; i<(int)br.size(); ++i) {
-                    int vv = br[i];
-                    V[vv].bid = hit_bid;
-                    V[vv].bpos = i;
-                }
-
-                if (right.size() >= 2) {
-                    // int bid2 = add_branch(right);
-                    (void)add_branch(right); // add branch from the right part
-                }
-
-                side = +1;
+    // 1) Walk all endpoint-anchored branches
+    for (int v = 0; v < N; ++v) {
+        if (!is_endpoint(GD.global_vers[v])) continue;
+        for (int nb : GD.global_adj[v]) {
+            if (edge_seen(v, nb)) continue;
+            auto branch = walk_branch(v, nb);
+            if (static_cast<int>(branch.size()) >= min_branch_l) {
+                GD.branches.emplace_back(std::move(branch));
             }
-
-            if (!path.empty() && path.back() == curr) {
-                path.pop_back();
-            }
-
-            extend_branch(hit_bid, side, path);
         }
     }
-
     return 1;
 }
 
@@ -719,86 +616,4 @@ bool GSkel::size_assert() {
     const int C = static_cast<int>(GD.gskel_size);
     const bool ok = (A == B) && (B == C);
     return ok;
-}
-
-bool GSkel::is_endpoint(const Vertex& v) {
-    return (v.type == 1 || v.type == 3);
-}
-
-int GSkel::add_branch(const std::vector<int>& chain) {
-    if (chain.size() < 2) return -1; // replace with max_branch_size???
-    int bid = (int)GD.branches.size();
-    GD.branches.push_back(chain);
-    for (int i=0; i<(int)chain.size(); ++i) {
-        int v = chain[i];
-        GD.global_vers[v].bid = bid; // set vertex branch id
-        GD.global_vers[v].bpos = i; // ser branch position id
-    }
-    return bid;
-}
-
-void GSkel::extend_branch(int bid, int side, const std::vector<int>& extra) {
-    // Insert a small sequence at a branch end (front/back)
-    // side: -1 = front, +1 = back
-    if (extra.empty()) return;
-    auto& br = GD.branches[bid];
-
-    if (side < 0) {
-        // insert at front, keep order
-        br.insert(br.begin(), extra.begin(), extra.end());
-        // reindex
-        for (int i=0; i<(int)br.size(); ++i) {
-            int v = br[i];
-            GD.global_vers[v].bid = bid;
-            GD.global_vers[v].bpos = i;
-        }
-    }
-    else {
-        // append at back
-        int start = (int)br.size();
-        br.insert(br.end(), extra.begin(), extra.end());
-        for (int i=start; i<(int)br.size(); ++i) {
-            int v = br[i];
-            GD.global_vers[v].bid = bid;
-            GD.global_vers[v].bpos = i;
-        }
-    }
-}
-
-void GSkel::merge_branch(int bidA, int A_end, std::vector<int> mid, int bidB, int B_end) {
-    // If two branches are connected by 'mid' sequence, merge them into A
-    // A_end = -1 front, +1 back
-    // B_end = -1 front, +1 back
-    if (bidA == bidB) return;
-    auto& A = GD.branches[bidA];
-    auto& B = GD.branches[bidB];
-    if (A.empty() || B.empty()) return;
-
-    if (A_end < 0) {
-        A.insert(A.begin(), mid.begin(), mid.end());
-        if (B_end < 0) std::reverse(B.begin(), B.end());
-        A.insert(A.end(), B.begin(), B.end());
-    }
-    else {
-        if (B_end > 0) std::reverse(B.begin(), B.end());
-        A.insert(A.end(), mid.begin(), mid.end());
-        A.insert(A.end(), B.begin(), B.end());
-    }
-
-    // reindex A
-    for (int i=0; i<(int)A.size(); ++i) {
-        int v = A[i];
-        GD.global_vers[v].bid = bidA;
-        GD.global_vers[v].bpos = i;
-    }
-
-    // invalidate B
-    B.clear();
-    for (auto& vv : GD.global_vers) {
-        if (vv.bid == bidB) {
-            vv.bid = -1;
-            vv.bpos = -1;
-        }
-    }
-
 }

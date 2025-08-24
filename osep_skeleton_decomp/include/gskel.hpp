@@ -7,6 +7,7 @@
 #include <chrono>
 #include <algorithm>
 #include <set>
+#include <unordered_set>
 #include <pcl/common/common.h>
 #include <pcl/common/point_tests.h>
 #include <pcl/search/kdtree.h>
@@ -68,15 +69,13 @@ struct UnionFind {
     }
 };
 
+
 struct Vertex {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     int vid = -1;
     std::vector<int> nb_ids;
     pcl::PointXYZ position;
     VertexLKF kf;
-
-    int bid = -1; // global branch id
-    int bpos = -1; // branch position id
 
     int obs_count = 0;
     int unconf_check = 0;
@@ -127,7 +126,7 @@ private:
     bool vertex_merge();
     bool prune();
     bool smooth_vertex_positions();
-    bool update_branches();
+    bool extract_branches();
     bool vid_manager();
     
     
@@ -138,12 +137,7 @@ private:
     void graph_decomp();
     void merge_into(int keep, int del);
     bool size_assert();
-    bool is_endpoint(const Vertex& v);
-    int add_branch(const std::vector<int>& chain);
-    void extend_branch(int bid, int side, const std::vector<int>& extra);
-    void merge_branch(int bidA, int A_end, std::vector<int> mid, int bidB, int B_end);
 
-    /* Params */
     GSkelConfig cfg_;
     bool running;
 
