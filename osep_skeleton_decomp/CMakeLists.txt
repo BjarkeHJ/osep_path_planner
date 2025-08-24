@@ -15,6 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 # ROS2 dependencies (run-time)
 find_package(rclcpp REQUIRED)
@@ -51,6 +52,7 @@ set(dependencies
     tf2_sensor_msgs
     sensor_msgs
     geometry_msgs
+    visualization_msgs
     std_msgs)
 
 

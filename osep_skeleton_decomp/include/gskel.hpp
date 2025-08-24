@@ -78,7 +78,7 @@ struct Vertex {
     int bid = -1; // global branch id
     int bpos = -1; // branch position id
 
-    int obs_coubt = 0;
+    int obs_count = 0;
     int unconf_check = 0;
     int type = 0;
     int smooth_iters;
