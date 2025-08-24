@@ -25,7 +25,11 @@ private:
   pcl::PointCloud<pcl::PointXYZI>::Ptr convert_to_pcl_cloud(const sensor_msgs::msg::PointCloud2& msg);
   std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
   nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);
-
+  void extract_local_from_global(nav_msgs::msg::OccupancyGrid& local_map);
+  void overwrite_local_with_esdf(nav_msgs::msg::OccupancyGrid& local_map, const pcl::PointCloud<pcl::PointXYZI>& cloud);
+  void clear_local_center(nav_msgs::msg::OccupancyGrid& local_map);
+  void merge_local_to_global(const nav_msgs::msg::OccupancyGrid& local_map);
+  void publish_maps(const nav_msgs::msg::OccupancyGrid& local_map);
 
 
   // --- Callback Methods ---
