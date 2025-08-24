@@ -26,10 +26,24 @@ private:
   std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
   nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);
   void extract_local_from_global(nav_msgs::msg::OccupancyGrid& local_map);
-  void overwrite_local_with_esdf(nav_msgs::msg::OccupancyGrid& local_map, const pcl::PointCloud<pcl::PointXYZI>& cloud);
+  void overwrite_local_with_esdf(
+    nav_msgs::msg::OccupancyGrid& local_map,
+    const std::vector<float>& esdf_grid,
+    const std::vector<bool>& esdf_mask
+  );  
   void clear_local_center(nav_msgs::msg::OccupancyGrid& local_map);
   void merge_local_to_global(const nav_msgs::msg::OccupancyGrid& local_map);
   void publish_maps(const nav_msgs::msg::OccupancyGrid& local_map);
+  void convert_cloud_to_esdf_grid(
+    const sensor_msgs::msg::PointCloud2& msg,
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int grid_width,
+    int grid_height,
+    float origin_x,
+    float origin_y,
+    float resolution
+  );
 
 
   // --- Callback Methods ---

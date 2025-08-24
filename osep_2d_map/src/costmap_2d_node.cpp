@@ -64,10 +64,35 @@ bool ESDF2dCostMapNode::validate_pointcloud2_fields(const sensor_msgs::msg::Poin
            msg.fields[3].name == "intensity";
 }
 
-pcl::PointCloud<pcl::PointXYZI>::Ptr ESDF2dCostMapNode::convert_to_pcl_cloud(const sensor_msgs::msg::PointCloud2& msg) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
-    pcl::fromROSMsg(msg, *cloud);
-    return cloud;
+void ESDF2dCostMapNode::convert_cloud_to_esdf_grid(
+    const sensor_msgs::msg::PointCloud2& msg,
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int grid_width,
+    int grid_height,
+    float origin_x,
+    float origin_y,
+    float resolution
+) {
+    // Convert to PCL cloud
+    pcl::PointCloud<pcl::PointXYZI> cloud;
+    pcl::fromROSMsg(msg, cloud);
+
+    // Initialize grid and mask
+    esdf_grid.assign(grid_width * grid_height, NAN);
+    esdf_mask.assign(grid_width * grid_height, false);
+
+    // Fill grid and mask from cloud
+    for (const auto& point : cloud.points) {
+        int grid_x = static_cast<int>((point.x - origin_x) / resolution);
+        int grid_y = static_cast<int>((point.y - origin_y) / resolution);
+
+        if (grid_x >= 0 && grid_x < grid_width && grid_y >= 0 && grid_y < grid_height) {
+            int idx = grid_y * grid_width + grid_x;
+            esdf_grid[idx] = point.intensity;
+            esdf_mask[idx] = true;
+        }
+    }
 }
 
 std::optional<geometry_msgs::msg::TransformStamped> ESDF2dCostMapNode::get_transform_to_odom() {
@@ -93,35 +118,30 @@ void ESDF2dCostMapNode::extract_local_from_global(nav_msgs::msg::OccupancyGrid& 
     }
 }
 
-void ESDF2dCostMapNode::overwrite_local_with_esdf(nav_msgs::msg::OccupancyGrid& local_map, const pcl::PointCloud<pcl::PointXYZI>& cloud) {
-    for (const auto& point : cloud.points) {
-        int grid_x = static_cast<int>((point.x - local_map.info.origin.position.x) / resolution_);
-        int grid_y = static_cast<int>((point.y - local_map.info.origin.position.y) / resolution_);
+void ESDF2dCostMapNode::overwrite_local_with_esdf(
+    nav_msgs::msg::OccupancyGrid& local_map,
+    const std::vector<float>& esdf_grid,
+    const std::vector<bool>& esdf_mask
+) {
+    for (int y = 0; y < local_grid_size_; ++y) {
+        for (int x = 0; x < local_grid_size_; ++x) {
+            int idx = y * local_grid_size_ + x;
+            if (!esdf_mask[idx]) continue; // skip if not set by ESDF
 
-        if (grid_x >= 0 && grid_x < local_grid_size_ && grid_y >= 0 && grid_y < local_grid_size_) {
-            float distance = point.intensity; // Distance to nearest obstacle from ESDF
+            float distance = esdf_grid[idx];
             int cost;
-
             if (distance < 0.0f) {
-                // Inside an obstacle or invalid value
-                cost = 100; // Maximum cost for obstacle
+                cost = 100;
             } else if (distance <= safety_distance_min_) {
-                // Within minimum safety distance
-                cost = 100; // Maximum cost (unsafe region)
+                cost = 100;
             } else if (distance <= safety_distance_max_) {
-                // Between minimum and maximum safety distance
-                // Linearly interpolate cost from 100 to 0
                 cost = static_cast<int>(100.0f * (1.0f - (distance - safety_distance_min_) /
                                                   (safety_distance_max_ - safety_distance_min_)));
             } else {
-                // Beyond maximum safety distance
-                cost = 0; // No cost (safe region)
+                cost = 0;
             }
-
-            // Ensure cost stays within the range [0, 100]
             cost = std::clamp(cost, 0, 100);
-
-            local_map.data[grid_y * local_grid_size_ + grid_x] = cost;
+            local_map.data[idx] = cost;
         }
     }
 }
@@ -194,14 +214,26 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
     return;
   }
 
-  auto cloud = convert_to_pcl_cloud(*esdf_msg);
-
   auto transform = get_transform_to_odom();
   if (!transform) return;
 
   nav_msgs::msg::OccupancyGrid local_map = create_local_map(*transform);
   extract_local_from_global(local_map);
-  overwrite_local_with_esdf(local_map, *cloud);
+
+  std::vector<float> esdf_grid;
+  std::vector<bool> esdf_mask;
+  convert_cloud_to_esdf_grid(
+      *esdf_msg,
+      esdf_grid,
+      esdf_mask,
+      local_grid_size_,
+      local_grid_size_,
+      local_map.info.origin.position.x,
+      local_map.info.origin.position.y,
+      resolution_
+  );
+
+  overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
   clear_local_center(local_map);
   merge_local_to_global(local_map);
 
