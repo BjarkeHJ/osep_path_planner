@@ -438,38 +438,44 @@ bool GSkel::smooth_vertex_positions() {
 }
 
 bool GSkel::extract_branches() {
-    const int min_branch_l = 1;
     const int N = static_cast<int>(GD.global_vers.size());
-    if (N == 0) return 0;
+    if (N == 0 || static_cast<int>(GD.global_adj.size()) != N) return 0;
 
-    GD.branches.clear();
-    GD.branches.shrink_to_fit();
-
-    graph_decomp();
-
-    auto is_endpoint = [&](const Vertex& v) -> bool {
-        return v.type == 1 || v.type == 3; // leaf or joint
+    // Build degree on the current MST graph
+    auto degree = [&](int v) -> int {
+        return (v >= 0 && v < static_cast<int>(GD.global_adj.size()))
+                 ? static_cast<int>(GD.global_adj[v].size()) : 0;
     };
 
+    auto is_endpoint = [&](int v) -> bool {
+        int d = degree(v);
+        return d == 1 || d > 2; // leaf or joint
+    };
+
+    // Undirected edge key (min,max) as 64-bit
     auto edge_key = [](int u, int v) -> uint64_t {
-        if (u > v) std::swap(u,v);
+        if (u > v) std::swap(u, v);
         return (static_cast<uint64_t>(u) << 32) | static_cast<uint32_t>(v);
     };
 
-    std::unordered_set<uint64_t> visited; 
-    visited.reserve(2u * N);
+    // ---- helper: standard global walker (but with "allowed" mask) ----
+    auto walk_branch = [&](int start, int nb,
+                           const std::vector<char>& allowed,
+                           std::unordered_set<uint64_t>& visited) -> std::vector<int> {
+        // Only walk inside the allowed subgraph and skip edges already "visited".
+        auto edge_seen = [&](int u, int v) -> bool {
+            return visited.count(edge_key(u, v)) != 0;
+        };
+        auto mark_edge = [&](int u, int v) {
+            visited.insert(edge_key(u, v));
+        };
 
-    auto mark_edge = [&](int u, int v) {
-        visited.insert(edge_key(u, v));
-    };
-
-    auto edge_seen = [&](int u, int v) -> bool {
-        return visited.find(edge_key(u, v)) != visited.end();
-    };
-
-    auto walk_branch = [&](int start, int nb) -> std::vector<int> {
         std::vector<int> branch;
         branch.reserve(32);
+
+        if (!allowed[start] || !allowed[nb]) return branch;      // outside region
+        if (edge_seen(start, nb)) return branch;                  // already consumed
+
         int prev = start;
         int curr = nb;
         branch.push_back(start);
@@ -478,38 +484,129 @@ bool GSkel::extract_branches() {
             branch.push_back(curr);
             mark_edge(prev, curr);
 
-            // Stop if we hit another endpoint (different from start)
-            if (is_endpoint(GD.global_vers[curr]) && curr != start) break;
+            if (is_endpoint(curr) && curr != start) break;       // stop at endpoint
 
-            // Choose the next neighbor that's not 'prev'
+            // choose next neighbor inside region and not equal to prev; prefer an unvisited edge
             int next = -1;
             for (int w : GD.global_adj[curr]) {
-                if (w != prev) {
-                    // If this edge is already walked, skip it
-                    if (!edge_seen(curr, w)) { next = w; break; }
+                if (w == prev) continue;
+                if (!allowed[w]) continue;
+                if (!edge_seen(curr, w)) { next = w; break; }
+            }
+            if (next == -1) {
+                // all neighbors either visited or outside; allow a fallback once if needed
+                for (int w : GD.global_adj[curr]) {
+                    if (w != prev && allowed[w]) { next = w; break; }
                 }
             }
-            if (next == -1) break; // dead end or all outgoing edges consumed
+            if (next == -1) break; // dead end
 
             prev = curr;
             curr = next;
         }
+
+        if (branch.size() < 2) branch.clear();
         return branch;
     };
 
-    // 1) Walk all endpoint-anchored branches
-    for (int v = 0; v < N; ++v) {
-        if (!is_endpoint(GD.global_vers[v])) continue;
-        for (int nb : GD.global_adj[v]) {
-            if (edge_seen(v, nb)) continue;
-            auto branch = walk_branch(v, nb);
-            if (static_cast<int>(branch.size()) >= min_branch_l) {
-                GD.branches.emplace_back(std::move(branch));
+    // ---- If no existing branches, do a full rebuild (one pass) ----
+    if (GD.branches.empty() || GD.new_vers_indxs.empty()) {
+        GD.branches.clear();
+
+        // global visited set
+        std::unordered_set<uint64_t> visited;
+        visited.reserve(std::max(1, 2 * N));
+
+        // allowed = whole graph
+        std::vector<char> allowed(N, 1);
+
+        // walk all endpoint-anchored branches
+        for (int v = 0; v < N; ++v) {
+            if (!is_endpoint(v)) continue;
+            for (int nb : GD.global_adj[v]) {
+                auto br = walk_branch(v, nb, allowed, visited);
+                if (!br.empty()) GD.branches.emplace_back(std::move(br));
             }
         }
+        return 1;
     }
+
+    // ---- Incremental: compute LOCAL affected region around new vertices ----
+    // We grow from each new vertex along degree-2 chains until reaching endpoints.
+    std::vector<char> in_region(N, 0);
+    std::vector<int> stack;
+    stack.reserve(256);
+
+    auto push_if = [&](int x) {
+        if (x < 0 || x >= N) return;
+        if (!in_region[x]) { in_region[x] = 1; stack.push_back(x); }
+    };
+
+    // seed region with new vertices and their immediate neighbors
+    for (int nv : GD.new_vers_indxs) {
+        if (nv < 0 || nv >= N) continue;
+        push_if(nv);
+        for (int nb : GD.global_adj[nv]) push_if(nb);
+    }
+
+    // expand region along degree-2 corridors until endpoints
+    while (!stack.empty()) {
+        int v = stack.back(); stack.pop_back();
+        // If this is an endpoint, we stop expanding from here.
+        if (is_endpoint(v)) continue;
+        // degree==2 corridor: include both neighbors
+        for (int nb : GD.global_adj[v]) push_if(nb);
+    }
+
+    // If the new verts are isolated (rare), bail out gracefully.
+    bool any_in = false;
+    for (char c : in_region) { if (c) { any_in = true; break; } }
+    if (!any_in) return 1;
+
+    // ---- Remove branches that touch the region (edge-based test) ----
+    // Build quick lookup of region edges
+    std::unordered_set<uint64_t> region_edges;
+    region_edges.reserve(8 * GD.new_vers_indxs.size() + 64);
+    for (int u = 0; u < N; ++u) {
+        if (!in_region[u]) continue;
+        for (int v : GD.global_adj[u]) {
+            if (!in_region[v]) continue;
+            if (v <= u) continue;
+            region_edges.insert(edge_key(u, v));
+        }
+    }
+
+    auto branch_hits_region = [&](const std::vector<int>& br) -> bool {
+        for (size_t i = 1; i < br.size(); ++i) {
+            if (region_edges.count(edge_key(br[i-1], br[i]))) return true;
+        }
+        return false;
+    };
+
+    std::vector<std::vector<int>> kept;
+    kept.reserve(GD.branches.size());
+    for (auto& br : GD.branches) {
+        if (!branch_hits_region(br)) kept.emplace_back(std::move(br));
+    }
+    GD.branches.swap(kept);
+
+    // ---- Rebuild branches ONLY inside the affected region ----
+    std::unordered_set<uint64_t> visited_local;  // only for region
+    visited_local.reserve(region_edges.size());
+
+    for (int v = 0; v < N; ++v) {
+        if (!in_region[v]) continue;
+        if (!is_endpoint(v)) continue; // only start from endpoints inside region
+        for (int nb : GD.global_adj[v]) {
+            if (!in_region[nb]) continue;
+            auto br = walk_branch(v, nb, in_region, visited_local);
+            if (!br.empty()) GD.branches.emplace_back(std::move(br));
+        }
+    }
+
     return 1;
 }
+
 
 bool GSkel::vid_manager() {
     for (int idx : GD.new_vers_indxs) {
