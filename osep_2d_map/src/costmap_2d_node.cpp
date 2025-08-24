@@ -121,17 +121,20 @@ void ESDF2dCostMapNode::fill_esdf_holes_wavefront(
         }
     }
 
-    int dx[4] = {1, -1, 0, 0};
-    int dy[4] = {0, 0, 1, -1};
+    // 8-connected neighbors (including diagonals)
+    int dx[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+    int dy[8] = {0, 0, 1, -1, 1, -1, 1, -1};
 
     while (!q.empty()) {
         Cell cell = q.front(); q.pop();
-        for (int k = 0; k < 4; ++k) {
+        for (int k = 0; k < 8; ++k) {
             int nx = cell.x + dx[k];
             int ny = cell.y + dy[k];
             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                 int nidx = ny * width + nx;
-                float new_val = std::min(cell.value + resolution, safety_distance);
+                // Use sqrt(2)*resolution for diagonal neighbors
+                float step = (k < 4) ? resolution : static_cast<float>(std::sqrt(2.0)) * resolution;
+                float new_val = std::min(cell.value + step, safety_distance);
                 if (!esdf_mask[nidx] || (esdf_grid[nidx] > new_val)) {
                     esdf_grid[nidx] = new_val;
                     esdf_mask[nidx] = true;
