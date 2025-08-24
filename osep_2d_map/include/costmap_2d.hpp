@@ -11,6 +11,8 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <algorithm>
+#include <optional>
+
 
 class ESDF2dCostMapNode : public rclcpp::Node {
 public:
@@ -18,6 +20,46 @@ public:
   ESDF2dCostMapNode();
 
 private:
+  // Functions
+  bool validate_pointcloud2_fields(const sensor_msgs::msg::PointCloud2& msg);
+    void convert_cloud_to_esdf_grid(
+    const sensor_msgs::msg::PointCloud2& msg,
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int grid_width,
+    int grid_height,
+    float origin_x,
+    float origin_y,
+    float resolution
+  );
+  void fill_esdf_holes_wavefront(
+    std::vector<float>& esdf_grid,
+    std::vector<bool>& esdf_mask,
+    int width,
+    int height,
+    float safety_distance,
+    float resolution
+  );
+  
+  void erosion_filter(nav_msgs::msg::OccupancyGrid& local_map);
+
+  std::optional<geometry_msgs::msg::TransformStamped> get_transform_to_odom();
+  nav_msgs::msg::OccupancyGrid create_local_map(const geometry_msgs::msg::TransformStamped& transform);
+  void extract_local_from_global(nav_msgs::msg::OccupancyGrid& local_map);
+  void overwrite_local_with_esdf(
+    nav_msgs::msg::OccupancyGrid& local_map,
+    const std::vector<float>& esdf_grid,
+    const std::vector<bool>& esdf_mask
+  );  
+  void clear_local_center(nav_msgs::msg::OccupancyGrid& local_map);
+  void merge_local_to_global(const nav_msgs::msg::OccupancyGrid& local_map);
+  void publish_maps(const nav_msgs::msg::OccupancyGrid& local_map);
+  void publish_esdf_grid_meters(
+    const std::vector<float>& esdf_grid,
+    const std::vector<bool>& esdf_mask,
+    const nav_msgs::msg::OccupancyGrid& local_map
+  );
+
   // --- Callback Methods ---
   void esdf_callback(const sensor_msgs::msg::PointCloud2::SharedPtr esdf_msg);
 
@@ -44,7 +86,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr esdf_sub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr global_map_pub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr local_map_pub_;
-
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr esdf_grid_pub_;
   // --- Global Map ---
   nav_msgs::msg::OccupancyGrid global_map_;
 };
