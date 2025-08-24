@@ -326,50 +326,49 @@ void ESDF2dCostMapNode::esdf_callback(const sensor_msgs::msg::PointCloud2::Share
         return;
     }
 
-    // Return early if the ESDF cloud has 0 points
-    if (esdf_msg->width == 0 || esdf_msg->height == 0 || esdf_msg->data.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Received ESDF PointCloud2 with 0 points, skipping processing.");
-        return;
+    auto transform = get_transform_to_odom();
+    if (!transform) return;
+
+    nav_msgs::msg::OccupancyGrid local_map = create_local_map(*transform);
+    extract_local_from_global(local_map);
+    erosion_filter(local_map);
+
+
+    std::vector<float> esdf_grid;
+    std::vector<bool> esdf_mask;
+    convert_cloud_to_esdf_grid(
+        *esdf_msg,
+        esdf_grid,
+        esdf_mask,
+        local_grid_size_,
+        local_grid_size_,
+        local_map.info.origin.position.x,
+        local_map.info.origin.position.y,
+        resolution_
+    );
+
+    // Only fill ESDF holes if there are more than 1000 points in the ESDF message
+    if (esdf_msg->width * esdf_msg->height > 1000) {
+        fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
     }
+    if (esdf_msg->width * esdf_msg->height > 0) {
+        overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
+    } else {
+        RCLCPP_WARN(this->get_logger(), "No valid ESDF data available for local map update.");
+    }
+    
+    clear_local_center(local_map);
+    merge_local_to_global(local_map);
 
-  auto transform = get_transform_to_odom();
-  if (!transform) return;
-
-  nav_msgs::msg::OccupancyGrid local_map = create_local_map(*transform);
-  extract_local_from_global(local_map);
-  erosion_filter(local_map);
-
-  std::vector<float> esdf_grid;
-  std::vector<bool> esdf_mask;
-  convert_cloud_to_esdf_grid(
-      *esdf_msg,
-      esdf_grid,
-      esdf_mask,
-      local_grid_size_,
-      local_grid_size_,
-      local_map.info.origin.position.x,
-      local_map.info.origin.position.y,
-      resolution_
-  );
-
-  // Only fill ESDF holes if there are more than 1000 points in the ESDF message
-  if (esdf_msg->width * esdf_msg->height > 1000) {
-      fill_esdf_holes_wavefront(esdf_grid, esdf_mask, local_grid_size_, local_grid_size_, safety_distance_, resolution_);
-  }
-
-  overwrite_local_with_esdf(local_map, esdf_grid, esdf_mask);
-  clear_local_center(local_map);
-  merge_local_to_global(local_map);
-
-  publish_maps(local_map);
-  publish_esdf_grid_meters(esdf_grid, esdf_mask, local_map);
+    publish_maps(local_map);
+    publish_esdf_grid_meters(esdf_grid, esdf_mask, local_map);
 }
 
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<ESDF2dCostMapNode>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<ESDF2dCostMapNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
