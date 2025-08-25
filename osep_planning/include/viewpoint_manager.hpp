@@ -78,13 +78,8 @@ private:
     bool viewpoint_visibility_graph();
 
     /* Helper */
-    std::vector<Viewpoint> generate_viewpoint(int id);
-
-
-    // branch extract and reduction
     std::vector<int> walk_branch(int start_idx, int nb_idx, const std::vector<char>& allowed, std::unordered_set<std::pair<int,int>, PairHash>& visited_edges);
-    std::vector<int> reduce_branch(const std::vector<int>& br_vids);
-    void build_reduced_skeleton();
+    std::vector<Viewpoint> generate_viewpoint(int id);
 
     /* Params */
     ViewpointConfig cfg_;
