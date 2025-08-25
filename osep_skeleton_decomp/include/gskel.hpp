@@ -96,8 +96,6 @@ struct GSkelData {
     std::vector<Vertex> global_vers;
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_vers_cloud;
     std::vector<int> new_vers_indxs;
-
-    std::vector<Vertex> reduced_gskel;
     
     std::vector<int> joints;
     std::vector<int> leafs;

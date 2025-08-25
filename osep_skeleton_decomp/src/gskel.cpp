@@ -32,13 +32,13 @@ bool GSkel::gskel_run() {
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
     RUN_STEP(extract_branches);
+    RUN_STEP(vid_manager);
 
     std::cout << "Number of branches: " << GD.branches.size() << std::endl;
     for (int i=0; i<(int)GD.branches.size(); ++i) {
         std::cout << "Branch " << i << " - Number of vertices: " << GD.branches[i].size() << std::endl; 
     }
 
-    RUN_STEP(vid_manager);
 
     auto te = std::chrono::high_resolution_clock::now();
     auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
@@ -185,7 +185,6 @@ bool GSkel::increment_skeleton() {
     GD.gskel_size = GD.global_vers.size();
 
     if (GD.new_vers_indxs.size() == 0) {
-        // std::cout << "No new vertices!" << std::endl;
         return 0; // No reason to proceed with the pipeline 
     }
     else return 1;
@@ -273,7 +272,6 @@ bool GSkel::mst() {
     }
 
     GD.global_adj = std::move(mst_adj);
-    // graph_decomp();
     return size_assert();
 }
 
@@ -281,10 +279,6 @@ bool GSkel::vertex_merge() {
     int N_new = GD.new_vers_indxs.size();
     if (GD.gskel_size == 0 || N_new == 0) return 0;
     if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
-
-    // auto is_joint = [&](int idx) {
-    //     return std::find(GD.joints.begin(), GD.joints.end(), idx) != GD.joints.end();
-    // };
 
     std::set<int> to_delete;
 
@@ -301,7 +295,6 @@ bool GSkel::vertex_merge() {
             // if (is_joint(new_id) && is_joint(nb_id)) {
             if (GD.global_adj[new_id].size() > 2 && GD.global_adj[nb_id].size() > 2) {
                 do_merge = true;
-                // GD.joints.erase(std::remove(GD.joints.begin(), GD.joints.end(), nb_id), GD.joints.end());
             }
 
             const auto &Vi = GD.global_vers[new_id];
@@ -354,9 +347,6 @@ bool GSkel::prune() {
     int N_new = GD.new_vers_indxs.size();
     if (GD.gskel_size == 0 || N_new == 0) return 0;
     if (static_cast<float>(N_new) / static_cast<float>(GD.gskel_size) > 0.5) return 1; // dont prune in beginning...
-
-    // std::set<int> joint_set(GD.joints.begin(), GD.joints.end());
-    // std::set<int> new_set(GD.new_vers_indxs.begin(), GD.new_vers_indxs.end());
     std::vector<int> to_delete;
 
     for (int v : GD.new_vers_indxs) {
@@ -369,16 +359,6 @@ bool GSkel::prune() {
     }
 
     if (to_delete.empty()) return 1; // exit w. success
-
-    // for (int leaf : GD.leafs) {
-    //     if (!new_set.count(leaf)) continue; // not a new leaf
-    //     if (GD.global_adj[leaf].size() != 1) continue; // sanity check...
-
-    //     int nb = GD.global_adj[leaf][0];
-    //     if (joint_set.count(nb)) {
-    //         to_delete.push_back(leaf);
-    //     }
-    // }
 
     std::sort(to_delete.rbegin(), to_delete.rend());
     for (int idx : to_delete) {
@@ -606,7 +586,6 @@ bool GSkel::extract_branches() {
 
     return 1;
 }
-
 
 bool GSkel::vid_manager() {
     for (int idx : GD.new_vers_indxs) {
