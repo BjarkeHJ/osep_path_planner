@@ -23,7 +23,7 @@ GSkel::GSkel(const GSkelConfig& cfg) : cfg_(cfg) {
 }
 
 bool GSkel::gskel_run() {
-    auto ts = std::chrono::high_resolution_clock::now();
+    // auto ts = std::chrono::high_resolution_clock::now();
 
     RUN_STEP(increment_skeleton);
     RUN_STEP(graph_adj);
@@ -31,18 +31,12 @@ bool GSkel::gskel_run() {
     RUN_STEP(vertex_merge);
     RUN_STEP(prune);
     RUN_STEP(smooth_vertex_positions);
-    RUN_STEP(extract_branches);
+
+    // RUN_STEP(extract_branches);
     RUN_STEP(vid_manager);
-
-    std::cout << "Number of branches: " << GD.branches.size() << std::endl;
-    for (int i=0; i<(int)GD.branches.size(); ++i) {
-        std::cout << "Branch " << i << " - Number of vertices: " << GD.branches[i].size() << std::endl; 
-    }
-
-
-    auto te = std::chrono::high_resolution_clock::now();
-    auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
-    std::cout << "[GSKEL] Time Elapsed: " << telaps << " ms" << std::endl;
+    // auto te = std::chrono::high_resolution_clock::now();
+    // auto telaps = std::chrono::duration_cast<std::chrono::milliseconds>(te-ts).count();
+    // std::cout << "[GSKEL] Time Elapsed: " << telaps << " ms" << std::endl;
     return running;
 }
 

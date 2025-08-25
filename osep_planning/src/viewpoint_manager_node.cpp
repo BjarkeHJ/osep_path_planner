@@ -11,6 +11,7 @@ ROS2 Node for Viewpoint managing
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include "osep_skeleton_decomp/msg/vertex.hpp"
 #include "osep_skeleton_decomp/msg/global_skeleton.hpp"
@@ -26,15 +27,18 @@ private:
     /* Functions */
     void skeleton_callback(MsgSkeleton::ConstSharedPtr vtx_msg);
     void process_tick();
+    void publish_reduced_skel(const std::vector<Vertex>& vertices, const std_msgs::msg::Header& src_header);
 
     /* ROS2 */
     rclcpp::Subscription<MsgSkeleton>::SharedPtr skel_sub_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr skel_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr vp_pub_;
     rclcpp::TimerBase::SharedPtr tick_timer_;
 
     /* Params */
     std::string skel_topic_;
+    std::string reduced_skel_topic_;
     std::string vp_topic_;
     std::string costmap_topic_;
     std::string global_frame_id_;
@@ -53,6 +57,8 @@ ViewpointNode::ViewpointNode() : Node("ViewpointManagerNode") {
     /* LAUNCH FILE PARAMETER DECLARATIONS */
     // MISC
     skel_topic_ = declare_parameter<std::string>("skeleton_topic", "/osep/gskel/global_skeleton_vertices");
+    reduced_skel_topic_ = declare_parameter<std::string>("reduced_skeleton_topic", "test_topic");
+
     costmap_topic_ = declare_parameter<std::string>("costmap_topic", "/osep/local_costmap/costmap");
     vp_topic_ = declare_parameter<std::string>("viewpoint_topic", "/osep/viewpoint_manager/viewpoints");
     tick_ms_ = declare_parameter<int>("tick_ms", 50);
@@ -69,9 +75,12 @@ ViewpointNode::ViewpointNode() : Node("ViewpointManagerNode") {
     skel_sub_ = this->create_subscription<MsgSkeleton>(skel_topic_,
                                                        sub_qos,
                                                        std::bind(&ViewpointNode::skeleton_callback, this, std::placeholders::_1));
+    auto pub_qos = rclcpp::QoS(rclcpp::KeepLast(1));
+    pub_qos.reliable().transient_local();
+    skel_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(reduced_skel_topic_, pub_qos);
+
     tick_timer_ = create_wall_timer(std::chrono::milliseconds(tick_ms_), std::bind(&ViewpointNode::process_tick, this));
     /* INITIALIZE DATA STRUCTURES */
-    
 }
 
 void ViewpointNode::skeleton_callback(MsgSkeleton::ConstSharedPtr vtx_msg) {
@@ -80,6 +89,27 @@ void ViewpointNode::skeleton_callback(MsgSkeleton::ConstSharedPtr vtx_msg) {
     latest_msg_ = std::move(vtx_msg);
     return;
 }
+
+void ViewpointNode::publish_reduced_skel(const std::vector<Vertex>& vertices, const std_msgs::msg::Header& src_header) {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZ>);
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    for (const auto& v : vertices) {
+        cloud_out->points.push_back(v.position);
+    }
+
+    cloud_out->width  = static_cast<uint32_t>(cloud_out->points.size());
+    cloud_out->height = 1;
+    cloud_out->is_dense = true;
+
+    pcl::toROSMsg(*cloud_out, cloud_msg);
+    cloud_msg.header = src_header;
+    if (cloud_msg.header.frame_id.empty()) cloud_msg.header.frame_id = global_frame_id_;
+    if (cloud_msg.header.stamp.sec == 0 && cloud_msg.header.stamp.nanosec == 0) {
+        cloud_msg.header.stamp = this->get_clock()->now();
+    }
+    skel_pub_->publish(cloud_msg);
+}
+
 
 void ViewpointNode::process_tick() {
     MsgSkeleton::ConstSharedPtr msg;
@@ -114,6 +144,8 @@ void ViewpointNode::process_tick() {
     if (vpman_->viewpoint_run()) {
         // publish viewpoints
     }
+
+    publish_reduced_skel(vpman_->output_skeleton(), msg->header);
 
 }
 

@@ -853,6 +853,3 @@ bool Rosa::local_line_fit(const std::vector<int>& nb, Eigen::Vector3f& mean_out,
     conf_out = eval(2) / denom;
     return true;
 } 
-
-
-

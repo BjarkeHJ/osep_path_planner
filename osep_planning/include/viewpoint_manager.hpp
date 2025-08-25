@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <unordered_set>
 #include <pcl/common/common.h>
 #include <Eigen/Core>
 
@@ -17,13 +18,10 @@ struct ViewpointConfig {
     int test;
 };
 
-struct Vertex {
-    int vid = -1;
-    std::vector<int> nb_ids;
-    pcl::PointXYZ position;
-    int type = 0;
-    bool pos_update = false;
-    bool type_update = false;
+struct PairHash {
+    std::size_t operator()(const std::pair<int,int>& p) const noexcept {
+        return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
+    }
 };
 
 struct Viewpoint {
@@ -37,11 +35,27 @@ struct Viewpoint {
     bool invalid = false;
 };
 
+struct Vertex {
+    int vid = -1;
+    std::vector<int> nb_ids;
+    pcl::PointXYZ position;
+    int type = 0;
+    bool pos_update = false;
+    bool type_update = false;
+
+    std::vector<Viewpoint> vpts; // Vertex viewpoints
+};
+
 struct ViewpointData {
     size_t gskel_size;
     std::vector<Vertex> global_skel;
+    std::vector<std::vector<int>> global_adj;
     std::vector<Viewpoint> global_vpts;
     std::vector<int> updated_vertices;
+
+    std::vector<std::vector<int>> branches;
+    std::vector<std::vector<int>> branches_simpl;
+    std::vector<Vertex> reduced_skel;
 };    
 
 
@@ -50,17 +64,27 @@ public:
     ViewpointManager(const ViewpointConfig &cfg);
     bool viewpoint_run();
     std::vector<Vertex>& input_skeleton() { return VD.global_skel; }
+    std::vector<Vertex>& output_skeleton() { return VD.reduced_skel; }
 
 private:
     /* Functions */
+    bool fetch_updated_vertices();
+    bool branch_extract();
+    bool branch_reduction();
+
+
     bool viewpoint_sampling();
     bool viewpoint_filtering();
     bool viewpoint_visibility_graph();
 
     /* Helper */
-    void fetch_updated_vertices();
     std::vector<Viewpoint> generate_viewpoint(int id);
 
+
+    // branch extract and reduction
+    std::vector<int> walk_branch(int start_idx, int nb_idx, const std::vector<char>& allowed, std::unordered_set<std::pair<int,int>, PairHash>& visited_edges);
+    std::vector<int> reduce_branch(const std::vector<int>& br_vids);
+    void build_reduced_skeleton();
 
     /* Params */
     ViewpointConfig cfg_;
@@ -68,6 +92,11 @@ private:
 
     /* Data */
     ViewpointData VD;
+
+    std::unordered_map<int,int> vid2idx_;
+    std::vector<int> idx2vid_;
+    std::vector<int> degree_;
+    std::vector<int> is_endpoint_;
 
     /* Utils */
 
