@@ -228,13 +228,13 @@ bool ViewpointManager::branch_reduction() {
 
 bool ViewpointManager::viewpoint_sampling() {
 
-    for (int i=0; i<VD.gskel_size; ++i) {
+    for (size_t i=0; i<VD.gskel_size; ++i) {
         auto& vertex = VD.global_skel[i];
         if (vertex.type_update || vertex.pos_update) vertex.vpts.clear();
         if (!vertex.vpts.empty()) continue; // already has viewpoints and is not cleared
 
         std::vector<Viewpoint> new_vpts = generate_viewpoint(vertex.vid);
-        
+
         
     }
 
@@ -247,9 +247,9 @@ std::vector<Viewpoint> ViewpointManager::generate_viewpoint(int id) {
     std::vector<Viewpoint> vpts_out;
     auto& v = VD.global_skel[id];
     const auto& type = v.type;
-    switch (type)
-    {
-    case 1: // leaf
+
+    if (type == 1) {
+        // leaf
         int id_adj = VD.global_adj[v.vid][0];
         auto& v_nb = VD.global_skel[id_adj];
         const Eigen::Vector3f p1 = v.position.getVector3fMap();
@@ -257,23 +257,22 @@ std::vector<Viewpoint> ViewpointManager::generate_viewpoint(int id) {
         Eigen::Vector3f dir = p2 - p1;
         if (dir.norm() < 1e-2f) return vpts_out;
         dir.normalize();
-
-
-
-        break;
-    case 2: // branch 
-
-        break;
-
-    case 3: // joint
-        
-        break;
-
-    default: // invalid
-        v.vpts.clear();
-        break;
+        return vpts_out;
     }
+    else if (type == 2) {
+        // branch 
 
+        return vpts_out;
+    }
+    else if (type == 3) {
+        // joint
+
+        return vpts_out;
+    }
+    else {
+        vpts_out.clear();
+        return vpts_out;
+    }
 }
 
 std::vector<int> ViewpointManager::walk_branch(int start_idx, int nb_idx, const std::vector<char>& allowed, std::unordered_set<std::pair<int,int>, PairHash>& visited_edges) {
