@@ -207,22 +207,6 @@ bool ViewpointManager::branch_extract() {
     return 1;
 }
 
-bool ViewpointManager::branch_reduction() {
-    VD.branches_simpl.clear();
-    VD.branches_simpl.reserve(VD.branches.size());
-
-    for (size_t b=0; b<VD.branches.size(); ++b) {
-        const auto& br = VD.branches[b];
-        if (br.size() < 2) continue;
-        auto simpl = reduce_branch(br);
-        if (simpl.size() < 2) continue;
-        VD.branches_simpl.emplace_back(simpl);
-    }
-
-    build_reduced_skeleton();
-    return 1;
-}
-
 bool ViewpointManager::viewpoint_sampling() {
 
     for (size_t i=0; i<VD.gskel_size; ++i) {
