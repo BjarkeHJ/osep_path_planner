@@ -54,8 +54,6 @@ struct ViewpointData {
     std::vector<int> updated_vertices;
 
     std::vector<std::vector<int>> branches;
-    std::vector<std::vector<int>> branches_simpl;
-    std::vector<Vertex> reduced_skel;
 };    
 
 
@@ -64,7 +62,6 @@ public:
     ViewpointManager(const ViewpointConfig &cfg);
     bool viewpoint_run();
     std::vector<Vertex>& input_skeleton() { return VD.global_skel; }
-    std::vector<Vertex>& output_skeleton() { return VD.reduced_skel; }
 
 private:
     /* Functions */
